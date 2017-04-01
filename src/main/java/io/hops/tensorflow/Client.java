@@ -546,7 +546,8 @@ public class Client {
     FileSystem fs = FileSystem.get(conf);
     ApplicationId appId = appResponse.getApplicationId();
     
-    Map<String, LocalResource> localResources = prepareLocalResources(fs, appId);
+    DistributedCacheList dcl = populateDistributedCache(fs, appId);
+    Map<String, LocalResource> localResources = prepareLocalResources(fs, appId, dcl);
     Map<String, String> launchEnv = setupLaunchEnv();
     
     // Set the executable command for the application master
@@ -615,71 +616,29 @@ public class Client {
     return amContainer;
   }
   
-  private String newArg(String param, String value) {
-    return "--" + param + " " + value;
+  private DistributedCacheList populateDistributedCache(FileSystem fs, ApplicationId appId) throws IOException {
+    DistributedCacheList distCacheList = new DistributedCacheList();
+    
+    mainRelativePath = addResource(fs, appId, mainPath, null, null, distCacheList, null, null);
+    
+    StringBuilder pythonPath = new StringBuilder(Constants.LOCALIZED_PYTHON_DIR);
+    if (cliParser.hasOption(FILES)) {
+      String[] files = cliParser.getOptionValue(FILES).split(",");
+      for (String file : files) {
+        if (file.endsWith(".py")) {
+          addResource(fs, appId, file, Constants.LOCALIZED_PYTHON_DIR, null, distCacheList, null, null);
+        } else {
+          addResource(fs, appId, file, null, null, distCacheList, null, pythonPath);
+        }
+      }
+    }
+    environment.put("PYTHONPATH", pythonPath.toString());
+    
+    return distCacheList;
   }
   
-  private ApplicationSubmissionContext createApplicationSubmissionContext(
-      YarnClientApplication app, ContainerLaunchContext containerContext) {
-    
-    ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
-    
-    if (name == null) {
-      appContext.setApplicationName(mainRelativePath);
-    } else {
-      appContext.setApplicationName(name);
-    }
-    appContext.setApplicationType("YARNTF");
-    
-    appContext.setKeepContainersAcrossApplicationAttempts(keepContainers);
-    if (attemptFailuresValidityInterval >= 0) {
-      appContext.setAttemptFailuresValidityInterval(attemptFailuresValidityInterval);
-    }
-    
-    if (null != nodeLabelExpression) {
-      appContext.setNodeLabelExpression(nodeLabelExpression);
-    }
-    
-    appContext.setResource(Resource.newInstance(amMemory, amVCores));
-    appContext.setAMContainerSpec(containerContext);
-    appContext.setPriority(Priority.newInstance(amPriority));
-    appContext.setQueue(amQueue); // the queue to which this application is to be submitted in the RM
-    
-    return appContext;
-  }
-  
-  private Map<String, String> setupLaunchEnv() throws IOException {
-    LOG.info("Set the environment for the application master");
-    Map<String, String> env = new HashMap<>();
-    
-    if (domainId != null && domainId.length() > 0) {
-      env.put(Constants.YARNTFTIMELINEDOMAIN, domainId);
-    }
-    
-    // Add AppMaster.jar location to classpath
-    StringBuilder classPathEnv = new StringBuilder(Environment.CLASSPATH.$$())
-        .append(ApplicationConstants.CLASS_PATH_SEPARATOR).append("./*");
-    for (String c : conf.getStrings(
-        YarnConfiguration.YARN_APPLICATION_CLASSPATH,
-        YarnConfiguration.DEFAULT_YARN_CROSS_PLATFORM_APPLICATION_CLASSPATH)) {
-      classPathEnv.append(ApplicationConstants.CLASS_PATH_SEPARATOR);
-      classPathEnv.append(c.trim());
-    }
-    classPathEnv.append(ApplicationConstants.CLASS_PATH_SEPARATOR).append(
-        "./log4j.properties");
-    
-    // add the runtime classpath needed for tests to work
-    if (conf.getBoolean(YarnConfiguration.IS_MINI_YARN_CLUSTER, false)) {
-      classPathEnv.append(':');
-      classPathEnv.append(System.getProperty("java.class.path"));
-    }
-    
-    env.put("CLASSPATH", classPathEnv.toString());
-    
-    return env;
-  }
-  
-  private Map<String, LocalResource> prepareLocalResources(FileSystem fs, ApplicationId appId) throws IOException {
+  private Map<String, LocalResource> prepareLocalResources(FileSystem fs, ApplicationId appId, DistributedCacheList dcl)
+      throws IOException {
     // set local resources for the application master
     // local files or archives as needed
     // In this scenario, the jar file for the application master is part of the local resources
@@ -692,8 +651,6 @@ public class Client {
     if (!log4jPropFile.isEmpty()) {
       addResource(fs, appId, log4jPropFile, null, Constants.LOG4J_PATH, null, localResources, null);
     }
-    
-    DistributedCacheList dcl = populateDistributedCache(fs, appId);
     
     // Write distCacheList to HDFS and add to localResources
     Path baseDir = new Path(fs.getHomeDirectory(), Constants.YARNTF_STAGING + "/" + appId.toString());
@@ -715,27 +672,6 @@ public class Client {
     localResources.put(Constants.DIST_CACHE_PATH, distCacheResource);
     
     return localResources;
-  }
-  
-  private DistributedCacheList populateDistributedCache(FileSystem fs, ApplicationId appId) throws IOException {
-    DistributedCacheList distCacheList = new DistributedCacheList();
-    
-    mainRelativePath = addResource(fs, appId, mainPath, null, null, distCacheList, null, null);
-    
-    StringBuilder pythonPath = new StringBuilder(Constants.LOCALIZED_PYTHON_DIR);
-    if (cliParser.hasOption(FILES)) {
-      String[] files = cliParser.getOptionValue(FILES).split(",");
-      for (String file : files) {
-        if (file.endsWith(".py")) {
-          addResource(fs, appId, file, Constants.LOCALIZED_PYTHON_DIR, null, distCacheList, null, null);
-        } else {
-          addResource(fs, appId, file, null, null, distCacheList, null, pythonPath);
-        }
-      }
-    }
-    environment.put("PYTHONPATH", pythonPath.toString());
-    
-    return distCacheList;
   }
   
   private String addResource(FileSystem fs, ApplicationId appId, String srcPath, String dstDir, String dstName,
@@ -785,5 +721,69 @@ public class Client {
     }
     
     return dstName;
+  }
+  
+  private Map<String, String> setupLaunchEnv() throws IOException {
+    LOG.info("Set the environment for the application master");
+    Map<String, String> env = new HashMap<>();
+    
+    if (domainId != null && domainId.length() > 0) {
+      env.put(Constants.YARNTFTIMELINEDOMAIN, domainId);
+    }
+    
+    // Add AppMaster.jar location to classpath
+    StringBuilder classPathEnv = new StringBuilder(Environment.CLASSPATH.$$())
+        .append(ApplicationConstants.CLASS_PATH_SEPARATOR).append("./*");
+    for (String c : conf.getStrings(
+        YarnConfiguration.YARN_APPLICATION_CLASSPATH,
+        YarnConfiguration.DEFAULT_YARN_CROSS_PLATFORM_APPLICATION_CLASSPATH)) {
+      classPathEnv.append(ApplicationConstants.CLASS_PATH_SEPARATOR);
+      classPathEnv.append(c.trim());
+    }
+    classPathEnv.append(ApplicationConstants.CLASS_PATH_SEPARATOR).append(
+        "./log4j.properties");
+    
+    // add the runtime classpath needed for tests to work
+    if (conf.getBoolean(YarnConfiguration.IS_MINI_YARN_CLUSTER, false)) {
+      classPathEnv.append(':');
+      classPathEnv.append(System.getProperty("java.class.path"));
+    }
+    
+    env.put("CLASSPATH", classPathEnv.toString());
+    
+    return env;
+  }
+  
+  private String newArg(String param, String value) {
+    return "--" + param + " " + value;
+  }
+  
+  private ApplicationSubmissionContext createApplicationSubmissionContext(
+      YarnClientApplication app, ContainerLaunchContext containerContext) {
+    
+    ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
+    
+    if (name == null) {
+      appContext.setApplicationName(mainRelativePath);
+    } else {
+      appContext.setApplicationName(name);
+    }
+    appContext.setApplicationType("YARNTF");
+    
+    appContext.setKeepContainersAcrossApplicationAttempts(keepContainers);
+    if (attemptFailuresValidityInterval >= 0) {
+      appContext.setAttemptFailuresValidityInterval(attemptFailuresValidityInterval);
+    }
+    
+    if (null != nodeLabelExpression) {
+      appContext.setNodeLabelExpression(nodeLabelExpression);
+    }
+    
+    appContext.setResource(Resource.newInstance(amMemory, amVCores));
+    appContext.setAMContainerSpec(containerContext);
+    appContext.setPriority(Priority.newInstance(amPriority));
+    appContext.setQueue(amQueue); // the queue to which this application is to be submitted in the RM
+    
+    return appContext;
   }
 }

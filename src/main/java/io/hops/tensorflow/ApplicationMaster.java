@@ -647,7 +647,7 @@ public class ApplicationMaster {
       envCopy.put("TASK_INDEX", Integer.toString(taskIndex));
       
       // Set the executable command for the allocated container
-      Vector<CharSequence> vargs = new Vector<>(5);
+      Vector<CharSequence> vargs = new Vector<>(15);
       
       // https://www.tensorflow.org/deploy/hadoop
       vargs.add("LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$JAVA_HOME/jre/lib/amd64/server");
