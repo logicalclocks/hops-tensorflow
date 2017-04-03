@@ -28,6 +28,7 @@ import static io.hops.tensorflow.ClientArguments.AM_JAR;
 import static io.hops.tensorflow.ClientArguments.AM_MEMORY;
 import static io.hops.tensorflow.ClientArguments.AM_VCORES;
 import static io.hops.tensorflow.ClientArguments.ARGS;
+import static io.hops.tensorflow.ClientArguments.FILES;
 import static io.hops.tensorflow.ClientArguments.MAIN;
 import static io.hops.tensorflow.ClientArguments.MEMORY;
 import static io.hops.tensorflow.ClientArguments.PSES;
@@ -66,5 +67,33 @@ public class TestYarnTF extends TestCluster {
     Assert.assertTrue(TestUtils.dumpAllRemoteContainersLogs(yarnCluster, appId));
     // Thread.sleep(5000);
     // TestUtils.dumpAllAggregatedContainersLogs(yarnCluster, appId);
+  }
+  
+  @Test(timeout = 90000)
+  public void testAddFiles() throws Exception {
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    String mainPath = classLoader.getResource("foo.py").getPath();
+    String extraDepPy = classLoader.getResource("bar.py").getPath();
+    String extraDepZip = classLoader.getResource("baz.zip").getPath();
+    
+    String[] args = {
+        "--" + AM_JAR, APPMASTER_JAR,
+        "--" + MEMORY, "256",
+        "--" + VCORES, "1",
+        "--" + FILES, extraDepPy + "," + extraDepZip,
+        "--" + MAIN, mainPath
+    };
+    
+    LOG.info("Initializing yarntf Client");
+    final Client client = new Client(new Configuration(yarnCluster.getConfig()));
+    boolean initSuccess = client.init(args);
+    Assert.assertTrue(initSuccess);
+    LOG.info("Running yarntf Client");
+    final ApplicationId appId = client.submitApplication();
+    
+    boolean result = client.monitorApplication(appId);
+    LOG.info("Client run completed. Result=" + result);
+    
+    Assert.assertEquals(2, TestUtils.verifyContainerLog(yarnCluster, 2, null, true, "hello, from baz"));
   }
 }
