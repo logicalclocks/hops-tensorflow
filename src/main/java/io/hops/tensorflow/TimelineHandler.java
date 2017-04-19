@@ -15,9 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.hops.tensorflow.applicationmaster;
+package io.hops.tensorflow;
 
-import io.hops.tensorflow.ApplicationMaster;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -85,12 +84,12 @@ public class TimelineHandler {
   public void publishContainerStartEvent(Container container) {
     final TimelineEntity entity = new TimelineEntity();
     entity.setEntityId(container.getId().toString());
-    entity.setEntityType(ApplicationMaster.YarnTFEntity.YARNTF_CONTAINER.toString());
+    entity.setEntityType(ApplicationMaster.YarntfEntity.YARNTF_CONTAINER.toString());
     entity.setDomainId(domainId);
     entity.addPrimaryFilter("user", ugi.getShortUserName());
     TimelineEvent event = new TimelineEvent();
     event.setTimestamp(System.currentTimeMillis());
-    event.setEventType(ApplicationMaster.YarnTFEvent.YARNTF_CONTAINER_START.toString());
+    event.setEventType(ApplicationMaster.YarntfEvent.YARNTF_CONTAINER_START.toString());
     event.addEventInfo("Node", container.getNodeId().toString());
     event.addEventInfo("Resources", container.getResource().toString());
     entity.addEvent(event);
@@ -112,12 +111,12 @@ public class TimelineHandler {
   public void publishContainerEndEvent(ContainerStatus container) {
     final TimelineEntity entity = new TimelineEntity();
     entity.setEntityId(container.getContainerId().toString());
-    entity.setEntityType(ApplicationMaster.YarnTFEntity.YARNTF_CONTAINER.toString());
+    entity.setEntityType(ApplicationMaster.YarntfEntity.YARNTF_CONTAINER.toString());
     entity.setDomainId(domainId);
     entity.addPrimaryFilter("user", ugi.getShortUserName());
     TimelineEvent event = new TimelineEvent();
     event.setTimestamp(System.currentTimeMillis());
-    event.setEventType(ApplicationMaster.YarnTFEvent.YARNTF_CONTAINER_END.toString());
+    event.setEventType(ApplicationMaster.YarntfEvent.YARNTF_CONTAINER_END.toString());
     event.addEventInfo("State", container.getState().name());
     event.addEventInfo("Exit Status", container.getExitStatus());
     entity.addEvent(event);
@@ -129,10 +128,10 @@ public class TimelineHandler {
     }
   }
   
-  public void publishApplicationAttemptEvent(ApplicationMaster.YarnTFEvent appEvent) {
+  public void publishApplicationAttemptEvent(ApplicationMaster.YarntfEvent appEvent) {
     final TimelineEntity entity = new TimelineEntity();
     entity.setEntityId(appAttemptId);
-    entity.setEntityType(ApplicationMaster.YarnTFEntity.YARNTF_APP_ATTEMPT.toString());
+    entity.setEntityType(ApplicationMaster.YarntfEntity.YARNTF_APP_ATTEMPT.toString());
     entity.setDomainId(domainId);
     entity.addPrimaryFilter("user", ugi.getShortUserName());
     TimelineEvent event = new TimelineEvent();
@@ -143,7 +142,7 @@ public class TimelineHandler {
       timelineClient.putEntities(entity);
     } catch (YarnException | IOException e) {
       LOG.error("App Attempt "
-          + (appEvent.equals(ApplicationMaster.YarnTFEvent.YARNTF_APP_ATTEMPT_START) ? "start" : "end")
+          + (appEvent.equals(ApplicationMaster.YarntfEvent.YARNTF_APP_ATTEMPT_START) ? "start" : "end")
           + " event could not be published for "
           + appAttemptId.toString(), e);
     }

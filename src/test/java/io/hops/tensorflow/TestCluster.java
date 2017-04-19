@@ -63,6 +63,7 @@ public abstract class TestCluster {
     conf.setBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED, true);
     conf.set(YarnConfiguration.RM_SCHEDULER, CapacityScheduler.class.getName());
     conf.setBoolean(YarnConfiguration.NODE_LABELS_ENABLED, true);
+    conf.setBoolean(YarnConfiguration.NM_GPU_RESOURCE_ENABLED, false);
     
     if (yarnCluster == null) {
       yarnCluster =

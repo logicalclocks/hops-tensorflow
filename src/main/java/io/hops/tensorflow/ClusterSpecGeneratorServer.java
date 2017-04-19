@@ -43,19 +43,23 @@ public class ClusterSpecGeneratorServer {
   
   private String applicationId;
   private int numContainers;
+  private int numWorkers;
   private Server server;
+  private ClusterSpecGeneratorImpl clusterSpecGeneratorImpl;
   
-  public ClusterSpecGeneratorServer(String applicationId, int numContainers) {
+  public ClusterSpecGeneratorServer(String applicationId, int numContainers, int numWorkers) {
     this.applicationId = applicationId;
     this.numContainers = numContainers;
+    this.numWorkers = numWorkers;
   }
   
   public void start(int port) throws IOException {
     if (server != null) {
       throw new IllegalStateException("Already started");
     }
+    clusterSpecGeneratorImpl = new ClusterSpecGeneratorImpl();
     server = ServerBuilder.forPort(port)
-        .addService(new ClusterSpecGeneratorImpl())
+        .addService(clusterSpecGeneratorImpl)
         .build()
         .start();
     LOG.info("Server started, listening on " + port);
@@ -82,8 +86,22 @@ public class ClusterSpecGeneratorServer {
     }
   }
   
+  public Map<String, Container> getClusterSpec() {
+    if (clusterSpecGeneratorImpl.clusterSpec.size() != numContainers) {
+      return null;
+    }
+    return clusterSpecGeneratorImpl.clusterSpec;
+  }
+  
+  public Map<String, String> getTensorBoards() {
+    if (clusterSpecGeneratorImpl.tensorBoards.size() != numWorkers) {
+      return null;
+    }
+    return clusterSpecGeneratorImpl.tensorBoards;
+  }
+  
   public static void main(String[] args) throws IOException, InterruptedException {
-    ClusterSpecGeneratorServer server = new ClusterSpecGeneratorServer("(appId)", 3);
+    ClusterSpecGeneratorServer server = new ClusterSpecGeneratorServer("(appId)", 3, 3);
     server.start(50052);
     server.blockUntilShutdown();
   }
@@ -91,15 +109,21 @@ public class ClusterSpecGeneratorServer {
   private class ClusterSpecGeneratorImpl extends ClusterSpecGeneratorGrpc.ClusterSpecGeneratorImplBase {
     
     Map<String, Container> clusterSpec = new ConcurrentHashMap<>();
+    Map<String, String> tensorBoards = new ConcurrentHashMap<>();
     
     @Override
     public void registerContainer(RegisterContainerRequest request,
         StreamObserver<RegisterContainerReply> responseObserver) {
       Container container = request.getContainer();
       LOG.info("Received registerContainerRequest: (" + container.getApplicationId() + ", " + container.getIp()
-          + ", " + container.getPort() + ", " + container.getJobName() + ", " + container.getTaskIndex() + ")");
+          + ", " + container.getPort() + ", " + container.getJobName() + ", " + container.getTaskIndex() + ", " +
+          container.getTbPort() + ")");
       if (container.getApplicationId().equals(applicationId)) {
         clusterSpec.put(container.getJobName() + container.getTaskIndex(), container);
+        if (container.getTbPort() > 0) {
+          tensorBoards.put(container.getJobName() + container.getTaskIndex(),
+              container.getIp() + ":" + container.getTbPort());
+        }
         if (clusterSpec.size() > numContainers) {
           throw new IllegalStateException("clusterSpec size: " + clusterSpec.size());
         }

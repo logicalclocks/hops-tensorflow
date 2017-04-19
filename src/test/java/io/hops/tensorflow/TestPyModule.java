@@ -22,27 +22,21 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.InputStreamReader;
 
-public class TestClusterSpecGenerator {
-  
-  private static final int INITIAL_PORT = 1;
-  private static final int NUM_CONTAINERS = 3;
-  private static final int NUM_WORKERS = 2;
+public class TestPyModule {
   
   private ClusterSpecGeneratorServer server;
-  private ClusterSpecGeneratorClient client;
   
   @Before
   public void setup() {
-    server = new ClusterSpecGeneratorServer("(appId)", NUM_CONTAINERS, NUM_WORKERS);
-    int port = INITIAL_PORT;
+    server = new ClusterSpecGeneratorServer("(appId)", 3, 3);
+    int port = 50052;
     while (port <= 65535) {
       try {
         server.start(port);
-        client = new ClusterSpecGeneratorClient("localhost", port);
         break;
       } catch (IOException e) {
         port++;
@@ -53,22 +47,25 @@ public class TestClusterSpecGenerator {
   @After
   public void tearDown() throws Exception {
     server.stop();
-    if (client != null) {
-      client.shutdown();
-    }
   }
   
   @Test
-  public void ClusterSpecGenTest() {
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "ps", 0, -1));
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "ps", 0, -1));
-    Assert.assertEquals(0, client.getClusterSpec("(appId)").size());
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "worker", 0, 1024));
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "worker", 1, 2024));
-    Assert.assertEquals(NUM_CONTAINERS, client.getClusterSpec("(appId)").size());
-    List<String> tbs = new ArrayList<>(server.getTensorBoards().values());
-    Assert.assertEquals(2, tbs.size());
-    Assert.assertEquals("(ip)", tbs.get(0).split(":")[0]);
-    Assert.assertEquals("(ip)", tbs.get(1).split(":")[0]);
+  public void FactoryTest() throws Exception {
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    String pyPath = classLoader.getResource("factory_test.py").getPath();
+    Process p = Runtime.getRuntime().exec("python " + pyPath);
+    p.waitFor();
+    BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+    
+    int regs = 0;
+    String line = "";
+    while ((line = reader.readLine())!= null) {
+      if (line.contains("registered: True")) {
+        regs += 1;
+      }
+    }
+    Assert.assertEquals(3, regs);
+    Assert.assertEquals(3, server.getClusterSpec().size());
+    Assert.assertEquals(3, server.getTensorBoards().size());
   }
 }

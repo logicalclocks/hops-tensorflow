@@ -26,10 +26,13 @@ public abstract class CommonArguments {
   public static final String WORKERS = "workers";
   public static final String PSES = "pses";
   public static final String ENV = "env";
+  public static final String TENSORBOARD = "tensorboard";
   
   public static final String MEMORY = "memory";
   public static final String VCORES = "vcores";
+  public static final String GPUS = "gpus";
   public static final String PRIORITY = "priority";
+  public static final String ALLOCATION_TIMEOUT = "allocation_timeout";
   
   public static final String DEBUG = "debug";
   public static final String HELP = "help";
@@ -42,10 +45,13 @@ public abstract class CommonArguments {
     opts.addOption(WORKERS, true, "Number of workers");
     opts.addOption(PSES, true, "Number of parameter servers");
     opts.addOption(ENV, true, "Environment for Python application. Specified as env_key=env_val pairs");
+    opts.addOption(TENSORBOARD, false, "Enable TensorBoard, one for each worker");
     
-    opts.addOption(MEMORY, true, "Amount of memory in MB to be requested to run the Python application");
-    opts.addOption(VCORES, true, "Amount of virtual cores to be requested to run the Python application");
+    opts.addOption(MEMORY, true, "Amount of memory in MB to be requested to run the TF application");
+    opts.addOption(VCORES, true, "Amount of virtual cores to be requested to run the TF application");
+    opts.addOption(GPUS, true, "Amount of GPUs for each TF application container");
     opts.addOption(PRIORITY, true, "Priority for the Python application containers");
+    opts.addOption(ALLOCATION_TIMEOUT, true, "Container allocation timeout in seconds");
     
     opts.addOption(DEBUG, false, "Dump out debug information");
     opts.addOption(HELP, false, "Print usage");
