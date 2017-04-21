@@ -31,7 +31,7 @@ public abstract class CommonArguments {
   public static final String MEMORY = "memory";
   public static final String VCORES = "vcores";
   public static final String GPUS = "gpus";
-  public static final String PRIORITY = "priority";
+  // public static final String PRIORITY = "priority";
   public static final String ALLOCATION_TIMEOUT = "allocation_timeout";
   
   public static final String DEBUG = "debug";
@@ -50,7 +50,7 @@ public abstract class CommonArguments {
     opts.addOption(MEMORY, true, "Amount of memory in MB to be requested to run the TF application");
     opts.addOption(VCORES, true, "Amount of virtual cores to be requested to run the TF application");
     opts.addOption(GPUS, true, "Amount of GPUs for each TF application container");
-    opts.addOption(PRIORITY, true, "Priority for the Python application containers");
+    // opts.addOption(PRIORITY, true, "Priority for the Python application containers");
     opts.addOption(ALLOCATION_TIMEOUT, true, "Container allocation timeout in seconds");
     
     opts.addOption(DEBUG, false, "Dump out debug information");

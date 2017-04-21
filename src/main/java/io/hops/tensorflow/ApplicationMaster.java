@@ -79,7 +79,7 @@ import static io.hops.tensorflow.ApplicationMasterArguments.ENV;
 import static io.hops.tensorflow.ApplicationMasterArguments.HELP;
 import static io.hops.tensorflow.ApplicationMasterArguments.MAIN_RELATIVE;
 import static io.hops.tensorflow.ApplicationMasterArguments.MEMORY;
-import static io.hops.tensorflow.ApplicationMasterArguments.PRIORITY;
+// import static io.hops.tensorflow.ApplicationMasterArguments.PRIORITY;
 import static io.hops.tensorflow.ApplicationMasterArguments.PSES;
 import static io.hops.tensorflow.ApplicationMasterArguments.VCORES;
 import static io.hops.tensorflow.ApplicationMasterArguments.WORKERS;
@@ -132,7 +132,7 @@ public class ApplicationMaster {
   private int containerMemory;
   private int containerVirtualCores;
   private int containerGPUs;
-  private int requestPriority;
+  // private int requestPriority;
   private boolean tensorboard;
   
   // Timeout threshold for container allocation
@@ -316,7 +316,7 @@ public class ApplicationMaster {
     if (!(numWorkers > 0 && numPses > 0  || numWorkers == 1 && numPses == 0)) {
       throw new IllegalArgumentException("Invalid no. of workers or parameter server");
     }
-    requestPriority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
+    // requestPriority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
     
     allocationTimeout = Long.parseLong(cliParser.getOptionValue(ALLOCATION_TIMEOUT, "15")) * 1000;
     
@@ -419,6 +419,7 @@ public class ApplicationMaster {
     // Register self with ResourceManager
     // This will start heartbeating to the RM
     appMasterHostname = NetUtils.getHostname();
+    appMasterTrackingUrl = InetAddress.getLocalHost().getHostName() + ":" + TensorBoardServer.spawn(this);
     RegisterApplicationMasterResponse response = rmWrapper.getClient()
         .registerApplicationMaster(appMasterHostname, appMasterRpcPort, appMasterTrackingUrl);
     // Dump out information about cluster capability as seen by the resource manager
@@ -463,13 +464,13 @@ public class ApplicationMaster {
     
     // Send request for containers to RM
     for (int i = 0; i < numWorkers; i++) {
-      ContainerRequest containerAsk = setupContainerAskForRM(true);
-      rmWrapper.getClient().addContainerRequest(containerAsk);
+      ContainerRequest workerRequest = setupContainerAskForRM(true);
+      rmWrapper.getClient().addContainerRequest(workerRequest);
     }
     numRequestedContainers.addAndGet(numWorkers);
     for (int i = 0; i < numPses; i++) {
-      ContainerRequest containerAsk = setupContainerAskForRM(false);
-      rmWrapper.getClient().addContainerRequest(containerAsk);
+      ContainerRequest psRequest = setupContainerAskForRM(false);
+      rmWrapper.getClient().addContainerRequest(psRequest);
     }
     numRequestedContainers.addAndGet(numPses);
   }
@@ -492,11 +493,13 @@ public class ApplicationMaster {
    * @return the setup ResourceRequest to be sent to RM
    */
   public ContainerRequest setupContainerAskForRM(boolean worker) {
-    Priority pri = Priority.newInstance(requestPriority);
+    Priority pri = Priority.newInstance(1);
     
     // Set up resource type requirements
     Resource capability = Resource.newInstance(containerMemory, containerVirtualCores);
+    
     if (worker) {
+      pri.setPriority(0); // worker: 0, ps: 1
       capability.setGPUs(containerGPUs);
     }
     
@@ -510,10 +513,7 @@ public class ApplicationMaster {
    *
    * @return list of all TensorBoards, or null if not yet available
    */
-  public List<String> getTensorBoardEndpoints() {
-    if (clusterSpecServer == null) {
-      return null;
-    }
+  public List<String> getTensorBoardEndpoint() {
     return new ArrayList<>(clusterSpecServer.getTensorBoards().values());
   }
   
@@ -711,7 +711,7 @@ public class ApplicationMaster {
       envCopy.put("TASK_INDEX", Integer.toString(taskIndex));
       if (jobName.equals("worker")) {
         envCopy.put("TB_DIR", "tensorboard_" + taskIndex);
-        if (tensorboard) {
+        if (tensorboard && taskIndex == 0) {
           envCopy.put("TENSORBOARD", "true");
         }
       }
@@ -721,13 +721,9 @@ public class ApplicationMaster {
       
       // https://www.tensorflow.org/deploy/hadoop
       // https://www.tensorflow.org/install/install_linux
-      if (jobName.equals("worker") && containerGPUs < 1) {
-        vargs.add("LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$JAVA_HOME/jre/lib/amd64/server");
-      } else {
-        vargs.add("CUDA_HOME=/usr/local/cuda");
-        vargs.add("LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CUDA_HOME/lib64");
-        vargs.add("PATH=$PATH:$CUDA_HOME/bin");
-      }
+      vargs.add("CUDA_HOME=/usr/local/cuda");
+      vargs.add("LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$JAVA_HOME/jre/lib/amd64/server:$CUDA_HOME/lib64");
+      vargs.add("PATH=$PATH:$CUDA_HOME/bin");
       vargs.add("CLASSPATH=$($HADOOP_HDFS_HOME/bin/hadoop classpath --glob)");
       
       vargs.add("python " + mainRelative);

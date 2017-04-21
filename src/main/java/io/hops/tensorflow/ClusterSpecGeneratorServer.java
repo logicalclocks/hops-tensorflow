@@ -87,16 +87,10 @@ public class ClusterSpecGeneratorServer {
   }
   
   public Map<String, Container> getClusterSpec() {
-    if (clusterSpecGeneratorImpl.clusterSpec.size() != numContainers) {
-      return null;
-    }
     return clusterSpecGeneratorImpl.clusterSpec;
   }
   
   public Map<String, String> getTensorBoards() {
-    if (clusterSpecGeneratorImpl.tensorBoards.size() != numWorkers) {
-      return null;
-    }
     return clusterSpecGeneratorImpl.tensorBoards;
   }
   

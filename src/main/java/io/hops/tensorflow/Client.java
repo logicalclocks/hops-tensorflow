@@ -95,7 +95,7 @@ import static io.hops.tensorflow.ClientArguments.MEMORY;
 import static io.hops.tensorflow.ClientArguments.MODIFY_ACLS;
 import static io.hops.tensorflow.ClientArguments.NAME;
 import static io.hops.tensorflow.ClientArguments.NODE_LABEL_EXPRESSION;
-import static io.hops.tensorflow.ClientArguments.PRIORITY;
+// import static io.hops.tensorflow.ClientArguments.PRIORITY;
 import static io.hops.tensorflow.ClientArguments.PSES;
 import static io.hops.tensorflow.ClientArguments.QUEUE;
 import static io.hops.tensorflow.ClientArguments.APPLICATION_TIMEOUT;
@@ -124,7 +124,7 @@ public class Client {
   private final String appMasterMainClass; // class name
   
   // TF application config
-  private int priority;
+  // private int priority;
   private long allocationTimeout;
   private String name;
   private String mainPath;
@@ -306,7 +306,7 @@ public class Client {
         environment.put(key, val);
       }
     }
-    priority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
+    // priority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
     allocationTimeout = Long.parseLong(cliParser.getOptionValue(ALLOCATION_TIMEOUT, "15")) * 1000;
     
     memory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
@@ -577,7 +577,7 @@ public class Client {
     vargs.add(newArg(MEMORY, String.valueOf(memory)));
     vargs.add(newArg(VCORES, String.valueOf(vcores)));
     vargs.add(newArg(GPUS, String.valueOf(gpus)));
-    vargs.add(newArg(PRIORITY, String.valueOf(priority)));
+    // vargs.add(newArg(PRIORITY, String.valueOf(priority)));
     vargs.add(newArg(ALLOCATION_TIMEOUT, String.valueOf(allocationTimeout / 1000)));
     
     vargs.add(newArg(ApplicationMasterArguments.MAIN_RELATIVE, mainRelativePath));
