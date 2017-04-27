@@ -28,6 +28,7 @@ ${HOPSTF_HOME}/bin/yarntf-submit \
 ```
 4. Run evaluation:
 ```
+${HADOOP_HOME}/bin/hadoop fs -rm -r cifar10_eval
 ${HOPSTF_HOME}/bin/yarntf-submit \
         --workers       1 \
         --pses          0 \
