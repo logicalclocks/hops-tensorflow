@@ -6,7 +6,7 @@
 
   <groupId>io.hops</groupId>
   <artifactId>hops-tensorflow</artifactId>
-  <version>0.0.2</version>
+  <version>0.0.3-SNAPSHOT</version>
 
   <properties>
     <hadoop.version>2.7.3</hadoop.version>

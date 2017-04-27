@@ -6,7 +6,7 @@ script=$(readlink -f "$0")
 script_dir=$(dirname "$script")
 hops_tf_root=$(dirname "$script_dir")
 
-jar="$hops_tf_root"/target/hops-tensorflow-0.0.2.jar
+jar="$hops_tf_root"/target/hops-tensorflow-0.0.3-SNAPSHOT.jar
 client=io.hops.tensorflow.Client
 
 $HADOOP_HOME/bin/yarn jar $jar $client --am_jar $jar "$@"
