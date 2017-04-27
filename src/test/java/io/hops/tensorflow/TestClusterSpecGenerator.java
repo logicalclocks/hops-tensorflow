@@ -23,18 +23,21 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TestClusterSpecGenerator {
   
   private static final int INITIAL_PORT = 1;
   private static final int NUM_CONTAINERS = 3;
+  private static final int NUM_WORKERS = 2;
   
   private ClusterSpecGeneratorServer server;
   private ClusterSpecGeneratorClient client;
   
   @Before
   public void setup() {
-    server = new ClusterSpecGeneratorServer("(appId)", NUM_CONTAINERS);
+    server = new ClusterSpecGeneratorServer("(appId)", NUM_CONTAINERS, NUM_WORKERS);
     int port = INITIAL_PORT;
     while (port <= 65535) {
       try {
@@ -57,11 +60,15 @@ public class TestClusterSpecGenerator {
   
   @Test
   public void ClusterSpecGenTest() {
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "ps", 0));
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "ps", 0));
+    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "ps", 0, -1));
+    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "ps", 0, -1));
     Assert.assertEquals(0, client.getClusterSpec("(appId)").size());
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "worker", 0));
-    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "worker", 1));
+    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "worker", 0, 1024));
+    Assert.assertTrue(client.registerContainer("(appId)", "(ip)", 1024, "worker", 1, 2024));
     Assert.assertEquals(NUM_CONTAINERS, client.getClusterSpec("(appId)").size());
+    List<String> tbs = new ArrayList<>(server.getTensorBoards().values());
+    Assert.assertEquals(2, tbs.size());
+    Assert.assertEquals("(ip)", tbs.get(0).split(":")[0]);
+    Assert.assertEquals("(ip)", tbs.get(1).split(":")[0]);
   }
 }

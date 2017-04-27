@@ -90,18 +90,22 @@ import static io.hops.tensorflow.ClientArguments.HELP;
 import static io.hops.tensorflow.ClientArguments.KEEP_CONTAINERS_ACROSS_APPLICATION_ATTEMPTS;
 import static io.hops.tensorflow.ClientArguments.LOG_PROPERTIES;
 import static io.hops.tensorflow.ClientArguments.MAIN;
+import static io.hops.tensorflow.ClientArguments.MAX_APP_ATTEMPTS;
 import static io.hops.tensorflow.ClientArguments.MEMORY;
 import static io.hops.tensorflow.ClientArguments.MODIFY_ACLS;
 import static io.hops.tensorflow.ClientArguments.NAME;
 import static io.hops.tensorflow.ClientArguments.NODE_LABEL_EXPRESSION;
-import static io.hops.tensorflow.ClientArguments.PRIORITY;
+// import static io.hops.tensorflow.ClientArguments.PRIORITY;
 import static io.hops.tensorflow.ClientArguments.PSES;
 import static io.hops.tensorflow.ClientArguments.QUEUE;
-import static io.hops.tensorflow.ClientArguments.TIMEOUT;
+import static io.hops.tensorflow.ClientArguments.APPLICATION_TIMEOUT;
 import static io.hops.tensorflow.ClientArguments.VCORES;
 import static io.hops.tensorflow.ClientArguments.VIEW_ACLS;
 import static io.hops.tensorflow.ClientArguments.WORKERS;
 import static io.hops.tensorflow.ClientArguments.createOptions;
+import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
+import static io.hops.tensorflow.CommonArguments.GPUS;
+import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 
 public class Client {
   
@@ -120,7 +124,8 @@ public class Client {
   private final String appMasterMainClass; // class name
   
   // TF application config
-  private int priority;
+  // private int priority;
+  private long allocationTimeout;
   private String name;
   private String mainPath;
   private String mainRelativePath; // relative for worker or ps
@@ -129,7 +134,9 @@ public class Client {
   private int numPses;
   private int memory;
   private int vcores;
+  private int gpus;
   private Map<String, String> environment = new HashMap<>(); // environment variables
+  private boolean tensorboard;
   
   private String nodeLabelExpression;
   private String log4jPropFile; // if available, add to local resources and set into classpath
@@ -138,6 +145,7 @@ public class Client {
   private final long clientStartTime = System.currentTimeMillis();
   private long clientTimeout;
   
+  private int maxAppAttempts;
   private boolean keepContainers; // keep containers across application attempts.
   private long attemptFailuresValidityInterval;
   
@@ -244,8 +252,9 @@ public class Client {
     
     if (cliParser.hasOption(DEBUG)) {
       debugFlag = true;
-      
     }
+    
+    maxAppAttempts = Integer.parseInt(cliParser.getOptionValue(MAX_APP_ATTEMPTS, "1"));
     
     if (cliParser.hasOption(KEEP_CONTAINERS_ACROSS_APPLICATION_ATTEMPTS)) {
       LOG.info(KEEP_CONTAINERS_ACROSS_APPLICATION_ATTEMPTS);
@@ -297,25 +306,33 @@ public class Client {
         environment.put(key, val);
       }
     }
-    priority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
+    // priority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
+    allocationTimeout = Long.parseLong(cliParser.getOptionValue(ALLOCATION_TIMEOUT, "15")) * 1000;
     
     memory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     vcores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
+    gpus = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
     numPses = Integer.parseInt(cliParser.getOptionValue(PSES, "1"));
     
-    if (memory < 0 || vcores < 0 || numWorkers < 1 || numPses < 1) {
-      throw new IllegalArgumentException("Invalid no. of containers or container memory/vcores specified,"
+    if (!(memory > 0 && vcores > 0 && gpus > -1 &&
+        ((numWorkers > 0 && numPses > 0) || (numWorkers == 1 && numPses == 0)))) {
+      throw new IllegalArgumentException("Invalid no. of containers or container memory/vcores/gpus specified,"
           + " exiting."
           + " Specified memory=" + memory
           + ", vcores=" + vcores
+          + ", gpus=" + gpus
           + ", numWorkers=" + numWorkers
           + ", numPses=" + numPses);
+    }
+  
+    if (cliParser.hasOption(TENSORBOARD)) {
+      tensorboard = true;
     }
     
     nodeLabelExpression = cliParser.getOptionValue(NODE_LABEL_EXPRESSION, null);
     
-    clientTimeout = Integer.parseInt(cliParser.getOptionValue(TIMEOUT, "600000"));
+    clientTimeout = Long.parseLong(cliParser.getOptionValue(APPLICATION_TIMEOUT, "3600")) * 1000;
     
     attemptFailuresValidityInterval = Long.parseLong(
         cliParser.getOptionValue(ATTEMPT_FAILURES_VALIDITY_INTERVAL, "-1"));
@@ -559,7 +576,9 @@ public class Client {
     
     vargs.add(newArg(MEMORY, String.valueOf(memory)));
     vargs.add(newArg(VCORES, String.valueOf(vcores)));
-    vargs.add(newArg(PRIORITY, String.valueOf(priority)));
+    vargs.add(newArg(GPUS, String.valueOf(gpus)));
+    // vargs.add(newArg(PRIORITY, String.valueOf(priority)));
+    vargs.add(newArg(ALLOCATION_TIMEOUT, String.valueOf(allocationTimeout / 1000)));
     
     vargs.add(newArg(ApplicationMasterArguments.MAIN_RELATIVE, mainRelativePath));
     if (arguments != null) {
@@ -571,8 +590,11 @@ public class Client {
     for (Map.Entry<String, String> entry : environment.entrySet()) {
       vargs.add(newArg(ENV, entry.getKey() + "=" + entry.getValue()));
     }
+    if (tensorboard) {
+      vargs.add("--" + TENSORBOARD);
+    }
     if (debugFlag) {
-      vargs.add("--debug");
+      vargs.add("--" + DEBUG);
     }
     
     // Add log redirect params
@@ -586,7 +608,7 @@ public class Client {
     }
     
     LOG.info("Completed setting up app master command " + command.toString());
-    List<String> commands = new ArrayList<String>();
+    List<String> commands = new ArrayList<>();
     commands.add(command.toString());
     
     // Set up the container launch context for the application master
@@ -770,10 +792,9 @@ public class Client {
     }
     appContext.setApplicationType("YARNTF");
     
+    appContext.setMaxAppAttempts(maxAppAttempts);
     appContext.setKeepContainersAcrossApplicationAttempts(keepContainers);
-    if (attemptFailuresValidityInterval >= 0) {
-      appContext.setAttemptFailuresValidityInterval(attemptFailuresValidityInterval);
-    }
+    appContext.setAttemptFailuresValidityInterval(attemptFailuresValidityInterval);
     
     if (null != nodeLabelExpression) {
       appContext.setNodeLabelExpression(nodeLabelExpression);

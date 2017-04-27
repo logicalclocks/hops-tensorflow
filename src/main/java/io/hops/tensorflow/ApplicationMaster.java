@@ -18,9 +18,6 @@
 
 package io.hops.tensorflow;
 
-import io.hops.tensorflow.applicationmaster.NMWrapper;
-import io.hops.tensorflow.applicationmaster.RMWrapper;
-import io.hops.tensorflow.applicationmaster.TimelineHandler;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -82,28 +79,36 @@ import static io.hops.tensorflow.ApplicationMasterArguments.ENV;
 import static io.hops.tensorflow.ApplicationMasterArguments.HELP;
 import static io.hops.tensorflow.ApplicationMasterArguments.MAIN_RELATIVE;
 import static io.hops.tensorflow.ApplicationMasterArguments.MEMORY;
-import static io.hops.tensorflow.ApplicationMasterArguments.PRIORITY;
+// import static io.hops.tensorflow.ApplicationMasterArguments.PRIORITY;
 import static io.hops.tensorflow.ApplicationMasterArguments.PSES;
 import static io.hops.tensorflow.ApplicationMasterArguments.VCORES;
 import static io.hops.tensorflow.ApplicationMasterArguments.WORKERS;
 import static io.hops.tensorflow.ApplicationMasterArguments.createOptions;
+import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.ARGS;
+import static io.hops.tensorflow.CommonArguments.GPUS;
+import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 import static io.hops.tensorflow.Constants.LOG4J_PATH;
 
 public class ApplicationMaster {
   
   private static final Log LOG = LogFactory.getLog(ApplicationMaster.class);
   
-  public enum YarnTFEvent {
+  public enum YarntfEvent {
     YARNTF_APP_ATTEMPT_START,
     YARNTF_APP_ATTEMPT_END,
     YARNTF_CONTAINER_START,
     YARNTF_CONTAINER_END
   }
   
-  public enum YarnTFEntity {
+  public enum YarntfEntity {
     YARNTF_APP_ATTEMPT,
     YARNTF_CONTAINER
+  }
+  
+  public enum YarntfTask {
+    YARNTF_WORKER,
+    YARNTF_PS
   }
   
   // Configuration
@@ -126,7 +131,13 @@ public class ApplicationMaster {
   private int numTotalContainers;
   private int containerMemory;
   private int containerVirtualCores;
-  private int requestPriority;
+  private int containerGPUs;
+  // private int requestPriority;
+  private boolean tensorboard;
+  
+  // Timeout threshold for container allocation
+  private final long appMasterStartTime = System.currentTimeMillis();
+  private long allocationTimeout;
   
   // Counters for containers
   private AtomicInteger numCompletedContainers = new AtomicInteger();
@@ -149,6 +160,8 @@ public class ApplicationMaster {
   private String domainId; // Timeline domain ID
   
   private CommandLine cliParser;
+  
+  private ClusterSpecGeneratorServer clusterSpecServer;
   
   /**
    * @param args
@@ -285,24 +298,31 @@ public class ApplicationMaster {
       }
     }
     
+    if (cliParser.hasOption(TENSORBOARD)) {
+      tensorboard = true;
+    }
+    
     if (envs.containsKey(Constants.YARNTFTIMELINEDOMAIN)) {
       domainId = envs.get(Constants.YARNTFTIMELINEDOMAIN);
     }
     
     containerMemory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     containerVirtualCores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
+    containerGPUs = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
     
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
     numPses = Integer.parseInt(cliParser.getOptionValue(PSES, "1"));
     numTotalContainers = numWorkers + numPses;
-    if (numWorkers == 0 || numPses == 0) {
-      throw new IllegalArgumentException("Need at least 1 worker and 1 parameter server");
+    if (!(numWorkers > 0 && numPses > 0  || numWorkers == 1 && numPses == 0)) {
+      throw new IllegalArgumentException("Invalid no. of workers or parameter server");
     }
-    requestPriority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
+    // requestPriority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
+    
+    allocationTimeout = Long.parseLong(cliParser.getOptionValue(ALLOCATION_TIMEOUT, "15")) * 1000;
     
     environment.put("WORKERS", Integer.toString(numWorkers));
     environment.put("PSES", Integer.toString(numPses));
-    environment.put("HOME_DIRECTORY", FileSystem.get(conf).getHomeDirectory().toString());
+    environment.put("HOME_DIR", FileSystem.get(conf).getHomeDirectory().toString());
     environment.put("PYTHONUNBUFFERED", "true");
     
     DistributedCacheList distCacheList = null;
@@ -345,8 +365,8 @@ public class ApplicationMaster {
     LOG.info("Starting ApplicationMaster. " +
         "Workers: " + numWorkers + ", Parameter servers: " + numPses);
     
-    ClusterSpecGeneratorServer clusterSpecServer = new ClusterSpecGeneratorServer(
-        appAttemptID.getApplicationId().toString(), numTotalContainers);
+    clusterSpecServer = new ClusterSpecGeneratorServer(
+        appAttemptID.getApplicationId().toString(), numTotalContainers, numWorkers);
     LOG.info("Starting ClusterSpecGeneratorServer");
     int port = 2222;
     while (true) {
@@ -393,12 +413,13 @@ public class ApplicationMaster {
     timelineHandler = new TimelineHandler(appAttemptID.toString(), domainId, appSubmitterUgi);
     timelineHandler.startClient(conf);
     if (timelineHandler.isClientNotNull()) {
-      timelineHandler.publishApplicationAttemptEvent(YarnTFEvent.YARNTF_APP_ATTEMPT_START);
+      timelineHandler.publishApplicationAttemptEvent(YarntfEvent.YARNTF_APP_ATTEMPT_START);
     }
     
     // Register self with ResourceManager
     // This will start heartbeating to the RM
     appMasterHostname = NetUtils.getHostname();
+    appMasterTrackingUrl = InetAddress.getLocalHost().getHostName() + ":" + TensorBoardServer.spawn(this);
     RegisterApplicationMasterResponse response = rmWrapper.getClient()
         .registerApplicationMaster(appMasterHostname, appMasterRpcPort, appMasterTrackingUrl);
     // Dump out information about cluster capability as seen by the resource manager
@@ -407,6 +428,9 @@ public class ApplicationMaster {
     
     int maxVCores = response.getMaximumResourceCapability().getVirtualCores();
     LOG.info("Max vcores capabililty of resources in this cluster " + maxVCores);
+    
+    int maxGPUS = response.getMaximumResourceCapability().getGPUs();
+    LOG.info("Max gpus capabililty of resources in this cluster " + maxGPUS);
     
     // A resource ask cannot exceed the max.
     if (containerMemory > maxMem) {
@@ -421,18 +445,34 @@ public class ApplicationMaster {
       containerVirtualCores = maxVCores;
     }
     
+    if (containerGPUs > maxGPUS) {
+      LOG.info("Container gpus specified above max threshold of cluster."
+          + " Using max value." + ", specified=" + containerGPUs + ", max=" + maxGPUS);
+      containerGPUs = maxGPUS;
+    }
+    
     List<Container> previousAMRunningContainers = response.getContainersFromPreviousAttempts();
     LOG.info(appAttemptID + " received " + previousAMRunningContainers.size()
         + " previous attempts' running containers on AM registration.");
     numAllocatedContainers.addAndGet(previousAMRunningContainers.size());
     
-    // Send request for containers to RM
-    int numTotalContainersToRequest = numTotalContainers - previousAMRunningContainers.size();
-    for (int i = 0; i < numTotalContainersToRequest; ++i) {
-      ContainerRequest containerAsk = setupContainerAskForRM();
-      rmWrapper.getClient().addContainerRequest(containerAsk);
+    // Stop eventual containers from previous attempts
+    for (Container prevContainer : previousAMRunningContainers) {
+      LOG.info("Releasing YARN container " + prevContainer.getId());
+      rmWrapper.getClient().releaseAssignedContainer(prevContainer.getId());
     }
-    numRequestedContainers.set(numTotalContainers);
+    
+    // Send request for containers to RM
+    for (int i = 0; i < numWorkers; i++) {
+      ContainerRequest workerRequest = setupContainerAskForRM(true);
+      rmWrapper.getClient().addContainerRequest(workerRequest);
+    }
+    numRequestedContainers.addAndGet(numWorkers);
+    for (int i = 0; i < numPses; i++) {
+      ContainerRequest psRequest = setupContainerAskForRM(false);
+      rmWrapper.getClient().addContainerRequest(psRequest);
+    }
+    numRequestedContainers.addAndGet(numPses);
   }
   
   public void setDone() {
@@ -452,59 +492,75 @@ public class ApplicationMaster {
    *
    * @return the setup ResourceRequest to be sent to RM
    */
-  public ContainerRequest setupContainerAskForRM() {
-    Priority pri = Priority.newInstance(requestPriority);
+  public ContainerRequest setupContainerAskForRM(boolean worker) {
+    Priority pri = Priority.newInstance(1);
     
     // Set up resource type requirements
-    // For now, memory and CPU are supported so we set memory and cpu requirements
-    Resource capability = Resource.newInstance(containerMemory,
-        containerVirtualCores);
+    Resource capability = Resource.newInstance(containerMemory, containerVirtualCores);
+    
+    if (worker) {
+      pri.setPriority(0); // worker: 0, ps: 1
+      capability.setGPUs(containerGPUs);
+    }
     
     ContainerRequest request = new ContainerRequest(capability, null, null, pri);
     LOG.info("Requested container ask: " + request.toString());
     return request;
   }
   
+  /**
+   * Get a list of all TensorBoards on the format [ip:port].
+   *
+   * @return list of all TensorBoards, or null if not yet available
+   */
+  public List<String> getTensorBoardEndpoint() {
+    return new ArrayList<>(clusterSpecServer.getTensorBoards().values());
+  }
+  
   // Getters for NM and RM wrappers
   
-  public TimelineHandler getTimelineHandler() {
+  TimelineHandler getTimelineHandler() {
     return timelineHandler;
   }
   
-  public AtomicInteger getNumCompletedContainers() {
+  AtomicInteger getNumCompletedContainers() {
     return numCompletedContainers;
   }
   
-  public AtomicInteger getNumCompletedWorkers() {
+  AtomicInteger getNumCompletedWorkers() {
     return numCompletedWorkers;
   }
   
-  public AtomicInteger getNumFailedContainers() {
+  AtomicInteger getNumFailedContainers() {
     return numFailedContainers;
   }
   
-  public ApplicationAttemptId getAppAttemptID() {
+  ApplicationAttemptId getAppAttemptID() {
     return appAttemptID;
   }
   
-  public AtomicInteger getNumAllocatedContainers() {
+  AtomicInteger getNumAllocatedContainers() {
     return numAllocatedContainers;
   }
   
-  public AtomicInteger getNumRequestedContainers() {
+  AtomicInteger getNumRequestedContainers() {
     return numRequestedContainers;
   }
   
-  public int getNumTotalContainers() {
+  int getNumTotalContainers() {
     return numTotalContainers;
   }
   
-  public int getNumWorkers() {
+  int getNumWorkers() {
     return numWorkers;
   }
   
-  public int getNumPses() {
+  int getNumPses() {
     return numPses;
+  }
+  
+  int getContainerGPUs() {
+    return containerGPUs;
   }
   
   /**
@@ -549,6 +605,14 @@ public class ApplicationMaster {
   private boolean finish() {
     // wait for completion. finish if any container fails
     while (!done && !(numCompletedWorkers.get() == numWorkers) && !(numFailedContainers.get() > 0)) {
+      if (numAllocatedContainers.get() != numTotalContainers) {
+        long timeLeft = appMasterStartTime + allocationTimeout - System.currentTimeMillis();
+        LOG.info("Awaits container allocation, timeLeft=" + timeLeft);
+        if (timeLeft < 0) {
+          LOG.warn("Container allocation timeout. Finish application attempt");
+          break;
+        }
+      }
       try {
         Thread.sleep(200);
       } catch (InterruptedException ex) {
@@ -556,7 +620,7 @@ public class ApplicationMaster {
     }
     
     if (timelineHandler.isClientNotNull()) {
-      timelineHandler.publishApplicationAttemptEvent(YarnTFEvent.YARNTF_APP_ATTEMPT_END);
+      timelineHandler.publishApplicationAttemptEvent(YarntfEvent.YARNTF_APP_ATTEMPT_END);
     }
     
     // Join all launched threads
@@ -645,12 +709,21 @@ public class ApplicationMaster {
       Map<String, String> envCopy = new HashMap<>(environment);
       envCopy.put("JOB_NAME", jobName);
       envCopy.put("TASK_INDEX", Integer.toString(taskIndex));
+      if (jobName.equals("worker")) {
+        envCopy.put("TB_DIR", "tensorboard_" + taskIndex);
+        if (tensorboard && taskIndex == 0) {
+          envCopy.put("TENSORBOARD", "true");
+        }
+      }
       
       // Set the executable command for the allocated container
       Vector<CharSequence> vargs = new Vector<>(15);
       
       // https://www.tensorflow.org/deploy/hadoop
-      vargs.add("LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$JAVA_HOME/jre/lib/amd64/server");
+      // https://www.tensorflow.org/install/install_linux
+      vargs.add("CUDA_HOME=/usr/local/cuda");
+      vargs.add("LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$JAVA_HOME/jre/lib/amd64/server:$CUDA_HOME/lib64");
+      vargs.add("PATH=$PATH:$CUDA_HOME/bin");
       vargs.add("CLASSPATH=$($HADOOP_HDFS_HOME/bin/hadoop classpath --glob)");
       
       vargs.add("python " + mainRelative);

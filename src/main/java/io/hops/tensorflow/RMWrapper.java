@@ -15,18 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.hops.tensorflow.applicationmaster;
+package io.hops.tensorflow;
 
-import io.hops.tensorflow.ApplicationMaster;
+import io.hops.tensorflow.ApplicationMaster.YarntfTask;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.yarn.api.records.Container;
-import org.apache.hadoop.yarn.api.records.ContainerExitStatus;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.ContainerState;
 import org.apache.hadoop.yarn.api.records.ContainerStatus;
 import org.apache.hadoop.yarn.api.records.NodeReport;
-import org.apache.hadoop.yarn.client.api.AMRMClient;
 import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
 
 import java.util.Collections;
@@ -72,45 +70,22 @@ public class RMWrapper {
         assert (containerStatus.getState() == ContainerState.COMPLETE);
         
         // increment counters for completed/failed containers
+        applicationMaster.getNumCompletedContainers().incrementAndGet();
+        if (workerIds.contains(containerStatus.getContainerId())) {
+          applicationMaster.getNumCompletedWorkers().incrementAndGet();
+        }
         int exitStatus = containerStatus.getExitStatus();
         if (0 != exitStatus) {
           // container failed
-          if (ContainerExitStatus.ABORTED != exitStatus) {
-            // application failed, counts as completed
-            applicationMaster.getNumCompletedContainers().incrementAndGet();
-            if (workerIds.contains(containerStatus.getContainerId())) {
-              applicationMaster.getNumCompletedWorkers().incrementAndGet();
-            }
-            applicationMaster.getNumFailedContainers().incrementAndGet();
-          } else {
-            // container was killed by framework, possibly preempted
-            // we should re-try as the container was lost for some reason
-            applicationMaster.getNumAllocatedContainers().decrementAndGet();
-            applicationMaster.getNumRequestedContainers().decrementAndGet();
-            // we do not need to release the container as it would be done by the RM
-          }
+          applicationMaster.getNumFailedContainers().incrementAndGet();
+          LOG.info("Container failed." + ", containerId=" + containerStatus.getContainerId());
         } else {
           // nothing to do, container completed successfully
-          applicationMaster.getNumCompletedContainers().incrementAndGet();
-          if (workerIds.contains(containerStatus.getContainerId())) {
-            applicationMaster.getNumCompletedWorkers().incrementAndGet();
-          }
-          LOG.info("Container completed successfully." + ", containerId="
-              + containerStatus.getContainerId());
+          LOG.info("Container completed successfully." + ", containerId=" + containerStatus.getContainerId());
         }
+        
         if (applicationMaster.getTimelineHandler().isClientNotNull()) {
           applicationMaster.getTimelineHandler().publishContainerEndEvent(containerStatus);
-        }
-      }
-      
-      // ask for more containers if any failed
-      int askCount = applicationMaster.getNumTotalContainers() - applicationMaster.getNumRequestedContainers().get();
-      applicationMaster.getNumRequestedContainers().addAndGet(askCount);
-      
-      if (askCount > 0) {
-        for (int i = 0; i < askCount; ++i) {
-          AMRMClient.ContainerRequest containerAsk = applicationMaster.setupContainerAskForRM();
-          client.addContainerRequest(containerAsk);
         }
       }
       
@@ -124,6 +99,7 @@ public class RMWrapper {
       LOG.info("Got response from RM for container ask, allocatedCnt=" + allocatedContainers.size());
       applicationMaster.getNumAllocatedContainers().addAndGet(allocatedContainers.size());
       for (Container allocatedContainer : allocatedContainers) {
+        LOG.info("Allocated container, resource=" + allocatedContainer.getResource());
         allAllocatedContainers.put(allocatedContainer.getId(), allocatedContainer);
       }
       if (applicationMaster.getNumAllocatedContainers().get() == applicationMaster.getNumTotalContainers()) {
@@ -133,8 +109,8 @@ public class RMWrapper {
     }
     
     private void launchAllContainers() {
-      int worker = -1;
-      int ps = -1;
+      int workerId = -1;
+      int psId = -1;
       for (Container allocatedContainer : allAllocatedContainers.values()) {
         LOG.info("Launching yarntf application on a new container."
             + ", containerId=" + allocatedContainer.getId()
@@ -150,16 +126,38 @@ public class RMWrapper {
         
         String jobName;
         int taskIndex;
+  
+        YarntfTask task;
         
-        if (worker < applicationMaster.getNumWorkers() - 1) {
-          jobName = "worker";
-          taskIndex = ++worker;
-          workerIds.add(allocatedContainer.getId());
-        } else if (ps < applicationMaster.getNumPses() - 1) {
-          jobName = "ps";
-          taskIndex = ++ps;
+        // decide task
+        if (applicationMaster.getContainerGPUs() > 0) {
+          // if GPU: by resource
+          if (allocatedContainer.getResource().getGPUs() > 0) {
+            task = YarntfTask.YARNTF_WORKER;
+          } else {
+            task = YarntfTask.YARNTF_PS;
+          }
         } else {
-          throw new IllegalStateException("Too many TF tasks: worker " + worker + ", ps: " + ps);
+          // if not: by counter
+          if (workerId < applicationMaster.getNumWorkers() - 1) {
+            task = YarntfTask.YARNTF_WORKER;
+          }  else {
+            task = YarntfTask.YARNTF_PS;
+          }
+        }
+        
+        // set task
+        if (task == YarntfTask.YARNTF_WORKER) {
+          jobName = "worker";
+          taskIndex = ++workerId;
+          workerIds.add(allocatedContainer.getId());
+        } else {
+          jobName = "ps";
+          taskIndex = ++psId;
+        }
+        
+        if (workerId >= applicationMaster.getNumWorkers() || psId >= applicationMaster.getNumWorkers()) {
+          throw new IllegalStateException("Too many TF tasks: workers " + workerId + ", pses: " + psId);
         }
         
         Thread launchThread = new Thread(applicationMaster
@@ -185,8 +183,7 @@ public class RMWrapper {
     @Override
     public float getProgress() {
       // set progress to deliver to RM on next heartbeat
-      float progress = (float) applicationMaster.getNumCompletedWorkers().get()
-          / applicationMaster.getNumWorkers();
+      float progress = (float) applicationMaster.getNumCompletedWorkers().get() / applicationMaster.getNumWorkers();
       return progress;
     }
     

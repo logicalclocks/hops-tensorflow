@@ -6,10 +6,9 @@
 
   <groupId>io.hops</groupId>
   <artifactId>hops-tensorflow</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.2</version>
 
   <properties>
-    <hadoop.distribution>org.apache.hadoop</hadoop.distribution>
     <hadoop.version>2.7.3</hadoop.version>
     <guava.version>20.0</guava.version>
     <protobuf.version>3.1.0</protobuf.version>
@@ -21,12 +20,12 @@
   <dependencies>
     <!-- hadoop -->
     <dependency>
-      <groupId>${hadoop.distribution}</groupId>
+      <groupId>io.hops</groupId>
       <artifactId>hadoop-common</artifactId>
       <version>${hadoop.version}</version>
     </dependency>
     <dependency>
-      <groupId>${hadoop.distribution}</groupId>
+      <groupId>io.hops</groupId>
       <artifactId>hadoop-yarn-client</artifactId>
       <version>${hadoop.version}</version>
     </dependency>
@@ -55,6 +54,12 @@
       <groupId>io.grpc</groupId>
       <artifactId>grpc-stub</artifactId>
       <version>${grpc.version}</version>
+    </dependency>
+    <!-- tensorboard server -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.8.0</version>
     </dependency>
     <!-- dependency hell -->
     <dependency>
@@ -89,14 +94,14 @@
     </dependency>
     <!-- test -->
     <dependency>
-      <groupId>${hadoop.distribution}</groupId>
+      <groupId>io.hops</groupId>
       <artifactId>hadoop-common</artifactId>
       <version>${hadoop.version}</version>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>${hadoop.distribution}</groupId>
+      <groupId>io.hops</groupId>
       <artifactId>hadoop-yarn-server-tests</artifactId>
       <version>${hadoop.version}</version>
       <type>test-jar</type>
@@ -168,9 +173,6 @@
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>
-      <properties>
-        <hadoop.distribution>io.hops</hadoop.distribution>
-      </properties>
       <dependencies>
         <dependency>
           <groupId>io.hops.metadata</groupId>

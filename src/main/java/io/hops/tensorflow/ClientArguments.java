@@ -25,17 +25,16 @@ public class ClientArguments extends CommonArguments {
   public static final String MAIN = "main";
   public static final String FILES = "files";
   
-  public static final String TENSORBOARD = "tensorboard"; // TODO: Implement usage
-  
   public static final String AM_JAR = "am_jar";
   public static final String AM_MEMORY = "am_memory";
   public static final String AM_VCORES = "am_vcores";
   public static final String AM_PRIORITY = "am_priority";
   
   public static final String QUEUE = "queue";
-  public static final String TIMEOUT = "timeout";
+  public static final String APPLICATION_TIMEOUT = "application_timeout";
   public static final String LOG_PROPERTIES = "log_properties";
   
+  public static final String MAX_APP_ATTEMPTS = "max_app_attempts";
   public static final String KEEP_CONTAINERS_ACROSS_APPLICATION_ATTEMPTS =
       "keep_containers_across_application_attempts";
   public static final String ATTEMPT_FAILURES_VALIDITY_INTERVAL = "attempt_failures_validity_interval";
@@ -53,17 +52,16 @@ public class ClientArguments extends CommonArguments {
     opts.addOption(FILES, true,
         "Comma-separated list of .zip, .egg, or .py files to place on the PYTHONPATH for Python apps.");
     
-    opts.addOption(TENSORBOARD, false, "Enable TensorBoard"); // TODO: Implement usage
-    
     opts.addOption(AM_JAR, true, "Jar file containing the application master");
     opts.addOption(AM_MEMORY, true, "Amount of memory in MB to be requested to run the application master");
     opts.addOption(AM_VCORES, true, "Amount of virtual cores to be requested to run the application master");
     opts.addOption(AM_PRIORITY, true, "Application Master Priority. Default 0");
     
     opts.addOption(QUEUE, true, "RM Queue in which this application is to be submitted");
-    opts.addOption(TIMEOUT, true, "Application timeout in milliseconds");
+    opts.addOption(APPLICATION_TIMEOUT, true, "Application timeout in seconds");
     opts.addOption(LOG_PROPERTIES, true, "log4j.properties file");
     
+    opts.addOption(MAX_APP_ATTEMPTS, true, "Number of max attempts of the application to be submitted");
     opts.addOption(KEEP_CONTAINERS_ACROSS_APPLICATION_ATTEMPTS, false,
         "Flag to indicate whether to keep containers across application attempts." +
             " If the flag is true, running containers will not be killed when" +

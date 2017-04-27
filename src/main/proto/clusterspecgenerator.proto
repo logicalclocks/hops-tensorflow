@@ -18,6 +18,7 @@ message Container {
     int32 port = 3;
     string jobName = 4;
     int32 taskIndex = 5;
+    int32 tbPort = 6;
 }
 
 message RegisterContainerRequest {

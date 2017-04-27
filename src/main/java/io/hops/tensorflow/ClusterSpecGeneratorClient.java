@@ -51,13 +51,15 @@ public class ClusterSpecGeneratorClient {
     channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
   
-  public boolean registerContainer(String applicationId, String ip, int port, String jobName, int taskIndex) {
+  public boolean registerContainer(String applicationId, String ip, int port, String jobName, int taskIndex,
+      int tbPort) {
     Container container = Container.newBuilder()
         .setApplicationId(applicationId)
         .setIp(ip)
         .setPort(port)
         .setJobName(jobName)
         .setTaskIndex(taskIndex)
+        .setTbPort(tbPort)
         .build();
     RegisterContainerRequest request = RegisterContainerRequest.newBuilder().setContainer(container).build();
     try {

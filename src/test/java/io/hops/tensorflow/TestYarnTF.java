@@ -34,6 +34,7 @@ import static io.hops.tensorflow.ClientArguments.MEMORY;
 import static io.hops.tensorflow.ClientArguments.PSES;
 import static io.hops.tensorflow.ClientArguments.VCORES;
 import static io.hops.tensorflow.ClientArguments.WORKERS;
+import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 
 public class TestYarnTF extends TestCluster {
   
@@ -50,7 +51,7 @@ public class TestYarnTF extends TestCluster {
         "--" + MEMORY, "256",
         "--" + VCORES, "1",
         "--" + MAIN, mainPath,
-        "--" + ARGS, "--images mnist/tfr/train --format tfr --mode train --model mnist_model"
+        "--" + ARGS, "--images mnist/tfr/train --format tfr --mode train --model mnist_model",
     };
     
     LOG.info("Initializing yarntf Client");
@@ -64,6 +65,7 @@ public class TestYarnTF extends TestCluster {
     LOG.info("Client run completed. Result=" + result);
     
     Assert.assertEquals(5, TestUtils.verifyContainerLog(yarnCluster, 5, null, true, "Number of arguments: 9"));
+    Assert.assertEquals(4, TestUtils.verifyContainerLog(yarnCluster, 5, null, true, "TB_DIR=tensorboard_"));
     Assert.assertTrue(TestUtils.dumpAllRemoteContainersLogs(yarnCluster, appId));
     // Thread.sleep(5000);
     // TestUtils.dumpAllAggregatedContainersLogs(yarnCluster, appId);
