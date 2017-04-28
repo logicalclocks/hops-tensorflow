@@ -2,9 +2,9 @@
 
 Original source: https://github.com/tensorflow/models/tree/master/slim
 
-## Try the example, Flowers data set
+## Try the example, CIFAR10 data set
 
-1. Prepare the data set and upload it to HDFS at `${FLOWERS_DATA}`, according to the instructions in the original 
+1. Prepare the data set and upload it to HDFS at `${SLIM_CIFAR10}`, according to the instructions in the original 
 source.
 2. Zip Slim files:
 ```
@@ -14,22 +14,20 @@ pushd ${HOPSTF_HOME}/yarntf/examples/slim; rm slim.zip; zip -r slim.zip .; popd
 ```
 ${HADOOP_HOME}/bin/hadoop fs -rm -r slim_train
 ${HOPSTF_HOME}/bin/yarntf-submit \
-        --workers       1 \
-        --pses          0 \
+        --workers       2 \
+        --pses          1 \
         --memory        8192 \
         --vcores        1 \
-        --gpus          0 \
+        --gpus          1 \
         --files ${HOPSTF_HOME}/yarntf/examples/slim/slim.zip \
         --main ${HOPSTF_HOME}/yarntf/examples/slim/train_image_classifier.py \
         --args \
-        --dataset_dir ${FLOWERS_DATA} \
+        --dataset_dir ${SLIM_CIFAR10} \
         --train_dir hdfs://default/user/${USER}/slim_train \
-        --dataset_name flowers \
+        --dataset_name cifar10 \
         --dataset_split_name train \
         --model_name inception_v3 \
-        --max_number_of_steps 1000 \
-        --clone_on_cpu \
-        --num_ps_tasks 0
+        --max_number_of_steps 1000
 ```
 4. Run evaluation:
 ```
@@ -39,14 +37,17 @@ ${HOPSTF_HOME}/bin/yarntf-submit \
         --pses          0 \
         --memory        8192 \
         --vcores        1 \
-        --gpus          0 \
+        --gpus          1 \
         --files ${HOPSTF_HOME}/yarntf/examples/slim/slim.zip \
         --main ${HOPSTF_HOME}/yarntf/examples/slim/eval_image_classifier.py \
         --args \
-        --dataset_dir ${FLOWERS_DATA} \
-        --dataset_name flowers \
+        --dataset_dir ${SLIM_CIFAR10} \
+        --dataset_name cifar10 \
         --dataset_split_name validation \
         --model_name inception_v3 \
         --checkpoint_path hdfs://default/user/${USER}/slim_train \
         --eval_dir hdfs://default/user/${USER}/slim_eval
 ```
+
+## Note
+This TensorFlow-Slim example suffers some issues since the TF v1 release.
