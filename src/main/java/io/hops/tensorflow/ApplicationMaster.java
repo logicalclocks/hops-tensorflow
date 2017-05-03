@@ -87,6 +87,7 @@ import static io.hops.tensorflow.ApplicationMasterArguments.createOptions;
 import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.ARGS;
 import static io.hops.tensorflow.CommonArguments.GPUS;
+import static io.hops.tensorflow.CommonArguments.RDMA;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 import static io.hops.tensorflow.Constants.LOG4J_PATH;
 
@@ -132,6 +133,7 @@ public class ApplicationMaster {
   private int containerMemory;
   private int containerVirtualCores;
   private int containerGPUs;
+  private boolean containerRDMA;
   // private int requestPriority;
   private boolean tensorboard;
   
@@ -309,6 +311,9 @@ public class ApplicationMaster {
     containerMemory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     containerVirtualCores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
     containerGPUs = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
+    if (cliParser.hasOption(RDMA)) {
+      containerRDMA = true;
+    }
     
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
     numPses = Integer.parseInt(cliParser.getOptionValue(PSES, "1"));
@@ -501,6 +506,10 @@ public class ApplicationMaster {
     if (worker) {
       pri.setPriority(0); // worker: 0, ps: 1
       capability.setGPUs(containerGPUs);
+    }
+    
+    if (containerRDMA) {
+      LOG.warn("Trying to enable RDMA. Not yet implemented");
     }
     
     ContainerRequest request = new ContainerRequest(capability, null, null, pri);

@@ -105,6 +105,7 @@ import static io.hops.tensorflow.ClientArguments.WORKERS;
 import static io.hops.tensorflow.ClientArguments.createOptions;
 import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.GPUS;
+import static io.hops.tensorflow.CommonArguments.RDMA;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 
 public class Client {
@@ -135,6 +136,7 @@ public class Client {
   private int memory;
   private int vcores;
   private int gpus;
+  private boolean rdma;
   private Map<String, String> environment = new HashMap<>(); // environment variables
   private boolean tensorboard;
   
@@ -312,6 +314,10 @@ public class Client {
     memory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     vcores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
     gpus = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
+    if (cliParser.hasOption(RDMA)) {
+      rdma = true;
+    }
+    
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
     numPses = Integer.parseInt(cliParser.getOptionValue(PSES, "1"));
     
@@ -577,6 +583,9 @@ public class Client {
     vargs.add(newArg(MEMORY, String.valueOf(memory)));
     vargs.add(newArg(VCORES, String.valueOf(vcores)));
     vargs.add(newArg(GPUS, String.valueOf(gpus)));
+    if (rdma) {
+      vargs.add("--" + RDMA);
+    }
     // vargs.add(newArg(PRIORITY, String.valueOf(priority)));
     vargs.add(newArg(ALLOCATION_TIMEOUT, String.valueOf(allocationTimeout / 1000)));
     
