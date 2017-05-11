@@ -216,7 +216,7 @@ def train():
     # Start the queue runners.
     tf.train.start_queue_runners(sess=sess)
 
-    summary_writer = tf.summary.FileWriter(os.environ["TB_DIR"], sess.graph)
+    summary_writer = tf.summary.FileWriter(os.environ["YARNTF_TB_DIR"], sess.graph)
 
     for step in xrange(FLAGS.max_steps):
       start_time = time.time()

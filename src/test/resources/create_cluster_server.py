@@ -9,5 +9,5 @@ print('Argument list: ' + str(sys.argv))
 
 cluster, server = yarntf.createClusterServer()
 
-if 'TB_DIR' in os.environ:
-    print('TB_DIR=' + os.environ['TB_DIR'])
+if 'YARNTF_TB_DIR' in os.environ:
+  print('YARNTF_TB_DIR=' + os.environ['YARNTF_TB_DIR'])

@@ -4,4 +4,4 @@ import baz
 
 
 def hello_from_baz():
-    baz.hello()
+  baz.hello()

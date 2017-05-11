@@ -9,7 +9,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
   name='yarntf',
-  version='0.0.3.dev1-SNAPSHOT',
+  version='0.0.3.dev3',
   description='Easy distributed TensorFlow on Hops Hadoop',
   long_description=long_description,
   url='https://github.com/hopshadoop/hops-tensorflow',
@@ -17,7 +17,7 @@ setup(
   author_email='tobias@johansson.xyz',
   license='Apache License 2.0',
   classifiers=[
-    'Development Status :: 3 - Alpha',
+    'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',
     'Topic :: Software Development :: Libraries',
     'License :: OSI Approved :: Apache Software License',

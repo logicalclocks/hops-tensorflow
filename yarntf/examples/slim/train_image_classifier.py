@@ -370,10 +370,10 @@ def main(_):
   cluster, server = yarntf.createClusterServer()
 
   # overwrite flags
-  FLAGS.job_name = os.environ["JOB_NAME"]
-  FLAGS.task = int(os.environ["TASK_INDEX"])
-  FLAGS.worker_replicas = int(os.environ["WORKERS"])
-  FLAGS.num_ps_tasks = int(os.environ["PSES"])
+  FLAGS.job_name = os.environ["YARNTF_JOB_NAME"]
+  FLAGS.task = int(os.environ["YARNTF_TASK_INDEX"])
+  FLAGS.worker_replicas = int(os.environ["YARNTF_WORKERS"])
+  FLAGS.num_ps_tasks = int(os.environ["YARNTF_PSES"])
   FLAGS.master = server.target
 
   if FLAGS.job_name == "ps":
@@ -556,7 +556,7 @@ def train():
 
     # Merge all summaries together.
     summary_op = tf.summary.merge(list(summaries), name='summary_op')
-    summary_writer = tf.summary.FileWriter(os.environ["TB_DIR"], graph=tf.get_default_graph())
+    summary_writer = tf.summary.FileWriter(os.environ["YARNTF_TB_DIR"], graph=tf.get_default_graph())
 
 
     ###########################

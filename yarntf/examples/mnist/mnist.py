@@ -23,14 +23,14 @@ def print_log(worker_id, arg):
 
 
 def hdfs_path(relative_path):
-  return os.environ["HOME_DIR"] + "/" + relative_path
+  return os.environ["YARNTF_HOME_DIR"] + "/" + relative_path
 
 
 def main(args):
-  job_name = os.environ["JOB_NAME"]
-  task_index = int(os.environ["TASK_INDEX"])
-  num_workers = int(os.environ["WORKERS"])
-  num_pses = int(os.environ["PSES"])
+  job_name = os.environ["YARNTF_JOB_NAME"]
+  task_index = int(os.environ["YARNTF_TASK_INDEX"])
+  num_workers = int(os.environ["YARNTF_WORKERS"])
+  num_pses = int(os.environ["YARNTF_PSES"])
   worker_id = job_name + str(task_index)
 
   # Parameters
@@ -165,7 +165,7 @@ def main(args):
     # Create a "supervisor", which oversees the training process and stores model state into HDFS
     logdir = hdfs_path(args.model)
     print("tensorflow model path: {0}".format(logdir))
-    summary_writer = tf.summary.FileWriter(os.environ["TB_DIR"], graph=tf.get_default_graph())
+    summary_writer = tf.summary.FileWriter(os.environ["YARNTF_TB_DIR"], graph=tf.get_default_graph())
 
     if args.mode == "train":
       sv = tf.train.Supervisor(is_chief=(task_index == 0),

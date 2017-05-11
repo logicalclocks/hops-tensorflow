@@ -60,12 +60,13 @@ public class TestPyModule {
     int regs = 0;
     String line = "";
     while ((line = reader.readLine())!= null) {
+      System.out.println(line);
       if (line.contains("registered: True")) {
         regs += 1;
       }
     }
     Assert.assertEquals(3, regs);
     Assert.assertEquals(3, server.getClusterSpec().size());
-    Assert.assertEquals(3, server.getTensorBoards().size());
+    Assert.assertEquals(1, server.getTensorBoards().size());
   }
 }

@@ -79,7 +79,6 @@ import static io.hops.tensorflow.ApplicationMasterArguments.ENV;
 import static io.hops.tensorflow.ApplicationMasterArguments.HELP;
 import static io.hops.tensorflow.ApplicationMasterArguments.MAIN_RELATIVE;
 import static io.hops.tensorflow.ApplicationMasterArguments.MEMORY;
-// import static io.hops.tensorflow.ApplicationMasterArguments.PRIORITY;
 import static io.hops.tensorflow.ApplicationMasterArguments.PSES;
 import static io.hops.tensorflow.ApplicationMasterArguments.VCORES;
 import static io.hops.tensorflow.ApplicationMasterArguments.WORKERS;
@@ -87,9 +86,11 @@ import static io.hops.tensorflow.ApplicationMasterArguments.createOptions;
 import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.ARGS;
 import static io.hops.tensorflow.CommonArguments.GPUS;
-import static io.hops.tensorflow.CommonArguments.RDMA;
+import static io.hops.tensorflow.CommonArguments.PROTOCOL;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 import static io.hops.tensorflow.Constants.LOG4J_PATH;
+
+// import static io.hops.tensorflow.ApplicationMasterArguments.PRIORITY;
 
 public class ApplicationMaster {
   
@@ -133,9 +134,8 @@ public class ApplicationMaster {
   private int containerMemory;
   private int containerVirtualCores;
   private int containerGPUs;
-  private boolean containerRDMA;
+  private String tfProtocol;
   // private int requestPriority;
-  private boolean tensorboard;
   
   // Timeout threshold for container allocation
   private final long appMasterStartTime = System.currentTimeMillis();
@@ -301,7 +301,7 @@ public class ApplicationMaster {
     }
     
     if (cliParser.hasOption(TENSORBOARD)) {
-      tensorboard = true;
+      environment.put("YARNTF_TENSORBOARD", "true");
     }
     
     if (envs.containsKey(Constants.YARNTFTIMELINEDOMAIN)) {
@@ -311,23 +311,27 @@ public class ApplicationMaster {
     containerMemory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     containerVirtualCores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
     containerGPUs = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
-    if (cliParser.hasOption(RDMA)) {
-      containerRDMA = true;
-    }
+    tfProtocol = cliParser.getOptionValue(PROTOCOL, null);
     
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
     numPses = Integer.parseInt(cliParser.getOptionValue(PSES, "1"));
     numTotalContainers = numWorkers + numPses;
-    if (!(numWorkers > 0 && numPses > 0  || numWorkers == 1 && numPses == 0)) {
+    if (!(numWorkers > 0 && numPses > 0 || numWorkers == 1 && numPses == 0)) {
       throw new IllegalArgumentException("Invalid no. of workers or parameter server");
     }
     // requestPriority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
     
     allocationTimeout = Long.parseLong(cliParser.getOptionValue(ALLOCATION_TIMEOUT, "15")) * 1000;
     
-    environment.put("WORKERS", Integer.toString(numWorkers));
-    environment.put("PSES", Integer.toString(numPses));
-    environment.put("HOME_DIR", FileSystem.get(conf).getHomeDirectory().toString());
+    environment.put("YARNTF_MEMORY", Integer.toString(containerMemory));
+    environment.put("YARNTF_VCORES", Integer.toString(containerVirtualCores));
+    environment.put("YARNTF_GPUS", Integer.toString(containerGPUs));
+    if (tfProtocol != null) {
+      environment.put("YARNTF_PROTOCOL", tfProtocol);
+    }
+    environment.put("YARNTF_WORKERS", Integer.toString(numWorkers));
+    environment.put("YARNTF_PSES", Integer.toString(numPses));
+    environment.put("YARNTF_HOME_DIR", FileSystem.get(conf).getHomeDirectory().toString());
     environment.put("PYTHONUNBUFFERED", "true");
     
     DistributedCacheList distCacheList = null;
@@ -382,8 +386,8 @@ public class ApplicationMaster {
         port++;
       }
     }
-    environment.put("AM_ADDRESS", InetAddress.getLocalHost().getHostName() + ":" + port);
-    environment.put("APPLICATION_ID", appAttemptID.getApplicationId().toString());
+    environment.put("YARNTF_AM_ADDRESS", InetAddress.getLocalHost().getHostName() + ":" + port);
+    environment.put("YARNTF_APPLICATION_ID", appAttemptID.getApplicationId().toString());
     
     // Note: Credentials, Token, UserGroupInformation, DataOutputBuffer class
     // are marked as LimitedPrivate
@@ -506,10 +510,6 @@ public class ApplicationMaster {
     if (worker) {
       pri.setPriority(0); // worker: 0, ps: 1
       capability.setGPUs(containerGPUs);
-    }
-    
-    if (containerRDMA) {
-      LOG.warn("Trying to enable RDMA. Not yet implemented");
     }
     
     ContainerRequest request = new ContainerRequest(capability, null, null, pri);
@@ -716,13 +716,10 @@ public class ApplicationMaster {
       LOG.info("Setting up container launch container for containerid=" + container.getId());
       
       Map<String, String> envCopy = new HashMap<>(environment);
-      envCopy.put("JOB_NAME", jobName);
-      envCopy.put("TASK_INDEX", Integer.toString(taskIndex));
+      envCopy.put("YARNTF_JOB_NAME", jobName);
+      envCopy.put("YARNTF_TASK_INDEX", Integer.toString(taskIndex));
       if (jobName.equals("worker")) {
-        envCopy.put("TB_DIR", "tensorboard_" + taskIndex);
-        if (tensorboard && taskIndex == 0) {
-          envCopy.put("TENSORBOARD", "true");
-        }
+        envCopy.put("YARNTF_TB_DIR", "tensorboard_" + taskIndex);
       }
       
       // Set the executable command for the allocated container

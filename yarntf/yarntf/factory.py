@@ -26,12 +26,13 @@ def createClusterSpec(am_address, application_id, job_name, task_index):
   client = ClusterSpecGeneratorClient(am_address)
 
   tb_port = -1
-  if 'TENSORBOARD' in os.environ and os.environ['TENSORBOARD'] == 'true':
+  if 'YARNTF_TENSORBOARD' in os.environ and job_name == 'worker' and task_index == 0:
     tb_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tb_s.bind(('', 0))
     tb_port = tb_s.getsockname()[1]
     tb_s.close()
-    subprocess.Popen(['tensorboard', '--logdir=' + os.environ['TB_DIR'], '--port=' + str(tb_port), '--debug'])
+    subprocess.Popen(
+      ['tensorboard', '--logdir=' + os.environ['YARNTF_TB_DIR'], '--port=' + str(tb_port), '--debug'])
 
   host = socket.gethostname()
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -82,9 +83,13 @@ def createClusterServer():
 
    Returns: A generated `ClusterSpec` for the application, and a `Server` instantiated from the same `ClusterSpec`.
   """
-  am_address = os.environ['AM_ADDRESS']
-  application_id = os.environ['APPLICATION_ID']
-  job_name = os.environ['JOB_NAME']
-  task_index = int(os.environ['TASK_INDEX'])
+  am_address = os.environ['YARNTF_AM_ADDRESS']
+  application_id = os.environ['YARNTF_APPLICATION_ID']
+  job_name = os.environ['YARNTF_JOB_NAME']
+  task_index = int(os.environ['YARNTF_TASK_INDEX'])
   cluster = createClusterSpec(am_address, application_id, job_name, task_index)
-  return cluster, tf.train.Server(cluster, job_name=job_name, task_index=task_index)
+  if 'YARNTF_PROTOCOL' in os.environ:
+    server = tf.train.Server(cluster, job_name=job_name, task_index=task_index, protocol=os.environ['YARNTF_PROTOCOL'])
+  else:
+    server = tf.train.Server(cluster, job_name=job_name, task_index=task_index)
+  return cluster, server

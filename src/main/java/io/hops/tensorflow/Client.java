@@ -79,6 +79,7 @@ import static io.hops.tensorflow.ClientArguments.AM_JAR;
 import static io.hops.tensorflow.ClientArguments.AM_MEMORY;
 import static io.hops.tensorflow.ClientArguments.AM_PRIORITY;
 import static io.hops.tensorflow.ClientArguments.AM_VCORES;
+import static io.hops.tensorflow.ClientArguments.APPLICATION_TIMEOUT;
 import static io.hops.tensorflow.ClientArguments.ARGS;
 import static io.hops.tensorflow.ClientArguments.ATTEMPT_FAILURES_VALIDITY_INTERVAL;
 import static io.hops.tensorflow.ClientArguments.CREATE;
@@ -95,18 +96,18 @@ import static io.hops.tensorflow.ClientArguments.MEMORY;
 import static io.hops.tensorflow.ClientArguments.MODIFY_ACLS;
 import static io.hops.tensorflow.ClientArguments.NAME;
 import static io.hops.tensorflow.ClientArguments.NODE_LABEL_EXPRESSION;
-// import static io.hops.tensorflow.ClientArguments.PRIORITY;
 import static io.hops.tensorflow.ClientArguments.PSES;
 import static io.hops.tensorflow.ClientArguments.QUEUE;
-import static io.hops.tensorflow.ClientArguments.APPLICATION_TIMEOUT;
 import static io.hops.tensorflow.ClientArguments.VCORES;
 import static io.hops.tensorflow.ClientArguments.VIEW_ACLS;
 import static io.hops.tensorflow.ClientArguments.WORKERS;
 import static io.hops.tensorflow.ClientArguments.createOptions;
 import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.GPUS;
-import static io.hops.tensorflow.CommonArguments.RDMA;
+import static io.hops.tensorflow.CommonArguments.PROTOCOL;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
+
+// import static io.hops.tensorflow.ClientArguments.PRIORITY;
 
 public class Client {
   
@@ -136,7 +137,7 @@ public class Client {
   private int memory;
   private int vcores;
   private int gpus;
-  private boolean rdma;
+  private String protocol;
   private Map<String, String> environment = new HashMap<>(); // environment variables
   private boolean tensorboard;
   
@@ -314,9 +315,7 @@ public class Client {
     memory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     vcores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
     gpus = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
-    if (cliParser.hasOption(RDMA)) {
-      rdma = true;
-    }
+    protocol = cliParser.getOptionValue(PROTOCOL, null);
     
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
     numPses = Integer.parseInt(cliParser.getOptionValue(PSES, "1"));
@@ -583,8 +582,8 @@ public class Client {
     vargs.add(newArg(MEMORY, String.valueOf(memory)));
     vargs.add(newArg(VCORES, String.valueOf(vcores)));
     vargs.add(newArg(GPUS, String.valueOf(gpus)));
-    if (rdma) {
-      vargs.add("--" + RDMA);
+    if (protocol != null) {
+      vargs.add(newArg(PROTOCOL, protocol));
     }
     // vargs.add(newArg(PRIORITY, String.valueOf(priority)));
     vargs.add(newArg(ALLOCATION_TIMEOUT, String.valueOf(allocationTimeout / 1000)));
