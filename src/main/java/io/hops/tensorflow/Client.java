@@ -105,6 +105,7 @@ import static io.hops.tensorflow.ClientArguments.createOptions;
 import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.GPUS;
 import static io.hops.tensorflow.CommonArguments.PROTOCOL;
+import static io.hops.tensorflow.CommonArguments.PYTHON;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 
 // import static io.hops.tensorflow.ClientArguments.PRIORITY;
@@ -126,6 +127,7 @@ public class Client {
   private final String appMasterMainClass; // class name
   
   // TF application config
+  private String python;
   // private int priority;
   private long allocationTimeout;
   private String name;
@@ -233,6 +235,8 @@ public class Client {
   public boolean init(String[] args) throws ParseException {
     
     cliParser = new GnuParser().parse(opts, args);
+    
+    python = cliParser.getOptionValue(PYTHON, null);
     
     if (args.length == 0) {
       printUsage();
@@ -579,6 +583,9 @@ public class Client {
     vargs.add("-Xmx" + amMemory + "m");
     vargs.add(appMasterMainClass);
     
+    if (python != null) {
+      vargs.add(newArg(PYTHON, python));
+    }
     vargs.add(newArg(MEMORY, String.valueOf(memory)));
     vargs.add(newArg(VCORES, String.valueOf(vcores)));
     vargs.add(newArg(GPUS, String.valueOf(gpus)));

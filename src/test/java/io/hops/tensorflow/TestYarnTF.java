@@ -35,6 +35,7 @@ import static io.hops.tensorflow.ClientArguments.PSES;
 import static io.hops.tensorflow.ClientArguments.VCORES;
 import static io.hops.tensorflow.ClientArguments.WORKERS;
 import static io.hops.tensorflow.CommonArguments.PROTOCOL;
+import static io.hops.tensorflow.CommonArguments.PYTHON;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 
 public class TestYarnTF extends TestCluster {
@@ -65,12 +66,10 @@ public class TestYarnTF extends TestCluster {
     
     boolean result = client.monitorApplication(appId);
     LOG.info("Client run completed. Result=" + result);
-  
+    
     Assert.assertTrue(TestUtils.dumpAllRemoteContainersLogs(yarnCluster, appId));
     Assert.assertEquals(5, TestUtils.verifyContainerLog(yarnCluster, 5, null, true, "Number of arguments: 9"));
     Assert.assertEquals(4, TestUtils.verifyContainerLog(yarnCluster, 5, null, true, "YARNTF_TB_DIR=tensorboard_"));
-    // Thread.sleep(5000);
-    // TestUtils.dumpAllAggregatedContainersLogs(yarnCluster, appId);
   }
   
   @Test(timeout = 90000)
@@ -81,6 +80,7 @@ public class TestYarnTF extends TestCluster {
     String extraDepZip = classLoader.getResource("baz.zip").getPath();
     
     String[] args = {
+        "--" + PYTHON, "/bin/python",
         "--" + AM_JAR, APPMASTER_JAR,
         "--" + MEMORY, "256",
         "--" + VCORES, "1",
@@ -101,5 +101,8 @@ public class TestYarnTF extends TestCluster {
     
     Assert.assertEquals(2, TestUtils.verifyContainerLog(yarnCluster, 2, null, true, "hello, from baz"));
     Assert.assertEquals(2, TestUtils.verifyContainerLog(yarnCluster, 2, null, true, "YARNTF_PROTOCOL=grpc+verbs"));
+    
+    Thread.sleep(5000);
+    TestUtils.dumpAllAggregatedContainersLogs(yarnCluster, appId);
   }
 }

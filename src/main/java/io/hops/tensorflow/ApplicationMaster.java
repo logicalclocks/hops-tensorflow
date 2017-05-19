@@ -87,6 +87,7 @@ import static io.hops.tensorflow.CommonArguments.ALLOCATION_TIMEOUT;
 import static io.hops.tensorflow.CommonArguments.ARGS;
 import static io.hops.tensorflow.CommonArguments.GPUS;
 import static io.hops.tensorflow.CommonArguments.PROTOCOL;
+import static io.hops.tensorflow.CommonArguments.PYTHON;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 import static io.hops.tensorflow.Constants.LOG4J_PATH;
 
@@ -128,6 +129,7 @@ public class ApplicationMaster {
   private String appMasterTrackingUrl = "";
   
   // App Master configuration
+  private String containerPython;
   private int numWorkers;
   private int numPses;
   private int numTotalContainers;
@@ -210,6 +212,8 @@ public class ApplicationMaster {
   public boolean init(String[] args) throws ParseException, IOException {
     Options opts = createOptions();
     cliParser = new GnuParser().parse(opts, args);
+  
+    containerPython = cliParser.getOptionValue(PYTHON, null);
     
     if (args.length == 0) {
       printUsage(opts);
@@ -736,7 +740,12 @@ public class ApplicationMaster {
       vargs.add("PATH=$PATH:$CUDA_HOME/bin");
       vargs.add("CLASSPATH=$($HADOOP_HDFS_HOME/bin/hadoop classpath --glob)");
       
-      vargs.add("python " + mainRelative);
+      if (containerPython != null) {
+        LOG.info("Using custom Python binary: " + containerPython);
+        vargs.add(containerPython + " " + mainRelative);
+      } else {
+        vargs.add("python " + mainRelative);
+      }
       vargs.add(StringUtils.join(arguments, " "));
       
       // Add log redirect params
