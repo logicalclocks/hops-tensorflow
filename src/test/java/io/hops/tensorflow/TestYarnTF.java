@@ -84,7 +84,7 @@ public class TestYarnTF extends TestCluster {
     boolean initSuccess = client.init(APPMASTER_JAR, main, extraDepPy + "," + extraDepZip, null);
     Assert.assertTrue(initSuccess);
     
-    client.setPython("/bin/python");
+    client.setPython("/usr/bin/python");
     client.setMemory(256);
     client.setVcores(1);
     client.setProtocol("grpc+verbs");
