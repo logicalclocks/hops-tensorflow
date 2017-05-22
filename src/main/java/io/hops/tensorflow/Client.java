@@ -359,6 +359,7 @@ public class Client {
     memory = Integer.parseInt(cliParser.getOptionValue(MEMORY, "1024"));
     vcores = Integer.parseInt(cliParser.getOptionValue(VCORES, "1"));
     gpus = Integer.parseInt(cliParser.getOptionValue(GPUS, "0"));
+    //Used for RDMA
     protocol = cliParser.getOptionValue(PROTOCOL, null);
     
     numWorkers = Integer.parseInt(cliParser.getOptionValue(WORKERS, "1"));
@@ -379,6 +380,7 @@ public class Client {
       tensorboard = true;
     }
     
+    //Used for RDMA
     nodeLabelExpression = cliParser.getOptionValue(NODE_LABEL_EXPRESSION, null);
     
     clientTimeout = Long.parseLong(cliParser.getOptionValue(APPLICATION_TIMEOUT, "3600")) * 1000;
