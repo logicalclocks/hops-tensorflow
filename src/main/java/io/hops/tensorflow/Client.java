@@ -231,37 +231,34 @@ public class Client {
    *     Path to JAR file containing the application master
    * @param main
    *     Your application's main Python file
-   * @return Whether the init was successful to run the client
-   * @throws ParseException
-   */
-  public boolean init(String amJar, String main) throws ParseException {
-    return init(new String[]{
-        "--" + AM_JAR, amJar,
-        "--" + MAIN, main
-    });
-  }
-  
-  /**
-   * Minimal init, with extra files
-   *
-   * @param amJar
-   *     Path to JAR file containing the application master
-   * @param main
-   *     Your application's main Python file
    * @param files
    *     Comma-separated list of .zip, .egg, or .py files to place on the PYTHONPATH for Python apps
+   * @param logProperties
+   *     log4j.properties file
    * @return Whether the init was successful to run the client
    * @throws ParseException
    */
-  public boolean init(String amJar, String main, String files) throws ParseException {
-    if (files == null) {
-      return init(amJar, main);
+  public boolean init(String amJar, String main, String files, String logProperties) throws ParseException {
+    
+    ArrayList<String> args = new ArrayList<>();
+    
+    args.add("--" + AM_JAR);
+    args.add(amJar);
+    
+    args.add("--" + MAIN);
+    args.add(main);
+    
+    if (files != null) {
+      args.add("--" + FILES);
+      args.add(files);
     }
-    return init(new String[]{
-        "--" + AM_JAR, amJar,
-        "--" + MAIN, main,
-        "--" + FILES, files
-    });
+    
+    if (logProperties != null) {
+      args.add("--" + LOG_PROPERTIES);
+      args.add(logProperties);
+    }
+    
+    return init(args.toArray(new String[0]));
   }
   
   /**

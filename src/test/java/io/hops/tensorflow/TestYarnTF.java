@@ -75,24 +75,20 @@ public class TestYarnTF extends TestCluster {
   @Test(timeout = 90000)
   public void testAddFiles() throws Exception {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    String mainPath = classLoader.getResource("foo.py").getPath();
+    String main = classLoader.getResource("foo.py").getPath();
     String extraDepPy = classLoader.getResource("bar.py").getPath();
     String extraDepZip = classLoader.getResource("baz.zip").getPath();
     
-    String[] args = {
-        "--" + PYTHON, "/bin/python",
-        "--" + AM_JAR, APPMASTER_JAR,
-        "--" + MEMORY, "256",
-        "--" + VCORES, "1",
-        "--" + FILES, extraDepPy + "," + extraDepZip,
-        "--" + MAIN, mainPath,
-        "--" + PROTOCOL, "grpc+verbs"
-    };
-    
     LOG.info("Initializing yarntf Client");
     final Client client = new Client(new Configuration(yarnCluster.getConfig()));
-    boolean initSuccess = client.init(args);
+    boolean initSuccess = client.init(APPMASTER_JAR, main, extraDepPy + "," + extraDepZip, null);
     Assert.assertTrue(initSuccess);
+    
+    client.setPython("/bin/python");
+    client.setMemory(256);
+    client.setVcores(1);
+    client.setProtocol("grpc+verbs");
+    
     LOG.info("Running yarntf Client");
     final ApplicationId appId = client.submitApplication();
     
