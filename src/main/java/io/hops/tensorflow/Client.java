@@ -120,7 +120,7 @@ public class Client {
   
   // App master config
   private int amPriority;
-  private String amQueue;
+  private String queue;
   private int amMemory;
   private int amVCores;
   private String amJar; // path
@@ -131,8 +131,8 @@ public class Client {
   // private int priority;
   private long allocationTimeout;
   private String name;
-  private String mainPath;
-  private String mainRelativePath; // relative for worker or ps
+  private String main;
+  private String mainRelative; // relative path for worker or ps
   private String[] arguments; // to be passed to the application
   private int numWorkers;
   private int numPses;
@@ -154,7 +154,7 @@ public class Client {
   private boolean keepContainers; // keep containers across application attempts.
   private long attemptFailuresValidityInterval;
   
-  private boolean debugFlag;
+  private boolean debug;
   
   // Timeline config
   private String domainId;
@@ -225,6 +225,46 @@ public class Client {
   }
   
   /**
+   * Minimal init
+   *
+   * @param amJar
+   *     Path to JAR file containing the application master
+   * @param main
+   *     Your application's main Python file
+   * @return Whether the init was successful to run the client
+   * @throws ParseException
+   */
+  public boolean init(String amJar, String main) throws ParseException {
+    return init(new String[]{
+        "--" + AM_JAR, amJar,
+        "--" + MAIN, main
+    });
+  }
+  
+  /**
+   * Minimal init, with extra files
+   *
+   * @param amJar
+   *     Path to JAR file containing the application master
+   * @param main
+   *     Your application's main Python file
+   * @param files
+   *     Comma-separated list of .zip, .egg, or .py files to place on the PYTHONPATH for Python apps
+   * @return Whether the init was successful to run the client
+   * @throws ParseException
+   */
+  public boolean init(String amJar, String main, String files) throws ParseException {
+    if (files == null) {
+      return init(amJar, main);
+    }
+    return init(new String[]{
+        "--" + AM_JAR, amJar,
+        "--" + MAIN, main,
+        "--" + FILES, files
+    });
+  }
+  
+  /**
    * Parse command line options
    *
    * @param args
@@ -258,7 +298,7 @@ public class Client {
     }
     
     if (cliParser.hasOption(DEBUG)) {
-      debugFlag = true;
+      debug = true;
     }
     
     maxAppAttempts = Integer.parseInt(cliParser.getOptionValue(MAX_APP_ATTEMPTS, "1"));
@@ -270,7 +310,7 @@ public class Client {
     
     name = cliParser.getOptionValue(NAME);
     amPriority = Integer.parseInt(cliParser.getOptionValue(AM_PRIORITY, "0"));
-    amQueue = cliParser.getOptionValue(QUEUE, "default");
+    queue = cliParser.getOptionValue(QUEUE, "default");
     amMemory = Integer.parseInt(cliParser.getOptionValue(AM_MEMORY, "192"));
     amVCores = Integer.parseInt(cliParser.getOptionValue(AM_VCORES, "1"));
     
@@ -291,7 +331,7 @@ public class Client {
     if (!cliParser.hasOption(MAIN)) {
       throw new IllegalArgumentException("No main application file specified");
     }
-    mainPath = cliParser.getOptionValue(MAIN);
+    main = cliParser.getOptionValue(MAIN);
     
     if (cliParser.hasOption(ARGS)) {
       arguments = cliParser.getOptionValues(ARGS);
@@ -334,7 +374,7 @@ public class Client {
           + ", numWorkers=" + numWorkers
           + ", numPses=" + numPses);
     }
-  
+    
     if (cliParser.hasOption(TENSORBOARD)) {
       tensorboard = true;
     }
@@ -418,7 +458,7 @@ public class Client {
           + "\n\t nodeNumContainers" + node.getNumContainers());
     }
     
-    QueueInfo queueInfo = yarnClient.getQueueInfo(this.amQueue);
+    QueueInfo queueInfo = yarnClient.getQueueInfo(this.queue);
     LOG.info("Queue info"
         + "\n\t queueName=" + queueInfo.getQueueName()
         + "\n\t queueCurrentCapacity=" + queueInfo.getCurrentCapacity()
@@ -519,6 +559,240 @@ public class Client {
     yarnClient.killApplication(appId);
   }
   
+  // Getters and setters for HopsWorks, see ClientArguments and CommonArguments for variable description
+  
+  public int getAmPriority() {
+    return amPriority;
+  }
+  
+  public void setAmPriority(int amPriority) {
+    this.amPriority = amPriority;
+  }
+  
+  public String getQueue() {
+    return queue;
+  }
+  
+  public void setQueue(String queue) {
+    this.queue = queue;
+  }
+  
+  public int getAmMemory() {
+    return amMemory;
+  }
+  
+  public void setAmMemory(int amMemory) {
+    this.amMemory = amMemory;
+  }
+  
+  public int getAmVCores() {
+    return amVCores;
+  }
+  
+  public void setAmVCores(int amVCores) {
+    this.amVCores = amVCores;
+  }
+  
+  public String getAmJar() {
+    return amJar;
+  }
+  
+  public void setAmJar(String amJar) {
+    this.amJar = amJar;
+  }
+  
+  public String getPython() {
+    return python;
+  }
+  
+  public void setPython(String python) {
+    this.python = python;
+  }
+  
+  public long getAllocationTimeout() {
+    return allocationTimeout;
+  }
+  
+  public void setAllocationTimeout(long allocationTimeout) {
+    this.allocationTimeout = allocationTimeout;
+  }
+  
+  public String getName() {
+    return name;
+  }
+  
+  public void setName(String name) {
+    this.name = name;
+  }
+  
+  public String getMain() {
+    return main;
+  }
+  
+  public void setMain(String main) {
+    this.main = main;
+  }
+  
+  public String[] getArguments() {
+    return arguments;
+  }
+  
+  public void setArguments(String[] arguments) {
+    this.arguments = arguments;
+  }
+  
+  public int getNumWorkers() {
+    return numWorkers;
+  }
+  
+  public void setNumWorkers(int numWorkers) {
+    this.numWorkers = numWorkers;
+  }
+  
+  public int getNumPses() {
+    return numPses;
+  }
+  
+  public void setNumPses(int numPses) {
+    this.numPses = numPses;
+  }
+  
+  public int getMemory() {
+    return memory;
+  }
+  
+  public void setMemory(int memory) {
+    this.memory = memory;
+  }
+  
+  public int getVcores() {
+    return vcores;
+  }
+  
+  public void setVcores(int vcores) {
+    this.vcores = vcores;
+  }
+  
+  public int getGpus() {
+    return gpus;
+  }
+  
+  public void setGpus(int gpus) {
+    this.gpus = gpus;
+  }
+  
+  public String getProtocol() {
+    return protocol;
+  }
+  
+  public void setProtocol(String protocol) {
+    this.protocol = protocol;
+  }
+  
+  public Map<String, String> getEnvironment() {
+    return environment;
+  }
+  
+  public void setEnvironment(Map<String, String> environment) {
+    this.environment = environment;
+  }
+  
+  public boolean isTensorboard() {
+    return tensorboard;
+  }
+  
+  public void setTensorboard(boolean tensorboard) {
+    this.tensorboard = tensorboard;
+  }
+  
+  public String getNodeLabelExpression() {
+    return nodeLabelExpression;
+  }
+  
+  public void setNodeLabelExpression(String nodeLabelExpression) {
+    this.nodeLabelExpression = nodeLabelExpression;
+  }
+  
+  public String getLog4jPropFile() {
+    return log4jPropFile;
+  }
+  
+  public void setLog4jPropFile(String log4jPropFile) {
+    this.log4jPropFile = log4jPropFile;
+  }
+  
+  public long getClientTimeout() {
+    return clientTimeout;
+  }
+  
+  public void setClientTimeout(long clientTimeout) {
+    this.clientTimeout = clientTimeout;
+  }
+  
+  public int getMaxAppAttempts() {
+    return maxAppAttempts;
+  }
+  
+  public void setMaxAppAttempts(int maxAppAttempts) {
+    this.maxAppAttempts = maxAppAttempts;
+  }
+  
+  public boolean isKeepContainers() {
+    return keepContainers;
+  }
+  
+  public void setKeepContainers(boolean keepContainers) {
+    this.keepContainers = keepContainers;
+  }
+  
+  public long getAttemptFailuresValidityInterval() {
+    return attemptFailuresValidityInterval;
+  }
+  
+  public void setAttemptFailuresValidityInterval(long attemptFailuresValidityInterval) {
+    this.attemptFailuresValidityInterval = attemptFailuresValidityInterval;
+  }
+  
+  public boolean isDebug() {
+    return debug;
+  }
+  
+  public void setDebug(boolean debug) {
+    this.debug = debug;
+  }
+  
+  public String getDomainId() {
+    return domainId;
+  }
+  
+  public void setDomainId(String domainId) {
+    this.domainId = domainId;
+  }
+  
+  public boolean isToCreateDomain() {
+    return toCreateDomain;
+  }
+  
+  public void setToCreateDomain(boolean toCreateDomain) {
+    this.toCreateDomain = toCreateDomain;
+  }
+  
+  public String getViewACLs() {
+    return viewACLs;
+  }
+  
+  public void setViewACLs(String viewACLs) {
+    this.viewACLs = viewACLs;
+  }
+  
+  public String getModifyACLs() {
+    return modifyACLs;
+  }
+  
+  public void setModifyACLs(String modifyACLs) {
+    this.modifyACLs = modifyACLs;
+  }
+  
   private void prepareTimelineDomain() {
     TimelineClient timelineClient;
     if (conf.getBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED,
@@ -595,7 +869,7 @@ public class Client {
     // vargs.add(newArg(PRIORITY, String.valueOf(priority)));
     vargs.add(newArg(ALLOCATION_TIMEOUT, String.valueOf(allocationTimeout / 1000)));
     
-    vargs.add(newArg(ApplicationMasterArguments.MAIN_RELATIVE, mainRelativePath));
+    vargs.add(newArg(ApplicationMasterArguments.MAIN_RELATIVE, mainRelative));
     if (arguments != null) {
       vargs.add(newArg(ARGS, StringUtils.join(arguments, " ")));
     }
@@ -608,7 +882,7 @@ public class Client {
     if (tensorboard) {
       vargs.add("--" + TENSORBOARD);
     }
-    if (debugFlag) {
+    if (debug) {
       vargs.add("--" + DEBUG);
     }
     
@@ -656,7 +930,7 @@ public class Client {
   private DistributedCacheList populateDistributedCache(FileSystem fs, ApplicationId appId) throws IOException {
     DistributedCacheList distCacheList = new DistributedCacheList();
     
-    mainRelativePath = addResource(fs, appId, mainPath, null, null, distCacheList, null, null);
+    mainRelative = addResource(fs, appId, main, null, null, distCacheList, null, null);
     
     StringBuilder pythonPath = new StringBuilder(Constants.LOCALIZED_PYTHON_DIR);
     if (cliParser.hasOption(FILES)) {
@@ -801,7 +1075,7 @@ public class Client {
     ApplicationSubmissionContext appContext = app.getApplicationSubmissionContext();
     
     if (name == null) {
-      appContext.setApplicationName(mainRelativePath);
+      appContext.setApplicationName(mainRelative);
     } else {
       appContext.setApplicationName(name);
     }
@@ -818,7 +1092,7 @@ public class Client {
     appContext.setResource(Resource.newInstance(amMemory, amVCores));
     appContext.setAMContainerSpec(containerContext);
     appContext.setPriority(Priority.newInstance(amPriority));
-    appContext.setQueue(amQueue); // the queue to which this application is to be submitted in the RM
+    appContext.setQueue(queue); // the queue to which this application is to be submitted in the RM
     
     return appContext;
   }
