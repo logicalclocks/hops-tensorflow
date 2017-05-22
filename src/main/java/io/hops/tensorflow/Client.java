@@ -985,28 +985,36 @@ public class Client {
   }
   
   private String addResource(FileSystem fs, ApplicationId appId, String srcPath, String dstDir, String dstName,
-      DistributedCacheList distCache, Map<String, LocalResource> localResources, StringBuilder pythonPath) throws
-      IOException {
+      DistributedCacheList distCache, Map<String, LocalResource> localResources, StringBuilder pythonPath)
+      throws IOException {
     Path src = new Path(srcPath);
     
-    if (dstDir == null) {
-      dstDir = ".";
-    }
     if (dstName == null) {
       dstName = src.getName();
     }
     
-    Path baseDir = new Path(fs.getHomeDirectory(), Constants.YARNTF_STAGING + "/" + appId.toString());
     String dstPath;
-    if (dstDir.startsWith(".")) {
-      dstPath = dstName;
+    Path dst;
+    if (srcPath.startsWith("hdfs://")) {
+      // no copying, `dstDir` and `dstName` will be ignored
+      dstPath = srcPath;
+      dst = src;
     } else {
-      dstPath = dstDir + "/" + dstName;
+      Path baseDir = new Path(fs.getHomeDirectory(), Constants.YARNTF_STAGING + "/" + appId.toString());
+      if (dstDir == null) {
+        dstDir = ".";
+      }
+      if (dstDir.startsWith(".")) {
+        dstPath = dstName;
+      } else {
+        dstPath = dstDir + "/" + dstName;
+      }
+      dst = new Path(baseDir, dstPath);
+      
+      LOG.info("Copying from local filesystem: " + src + " -> " + dst);
+      fs.copyFromLocalFile(src, dst);
     }
-    Path dst = new Path(baseDir, dstPath);
     
-    LOG.info("Copying from local filesystem: " + src + " -> " + dst);
-    fs.copyFromLocalFile(src, dst);
     FileStatus dstStatus = fs.getFileStatus(dst);
     
     if (distCache != null) {
