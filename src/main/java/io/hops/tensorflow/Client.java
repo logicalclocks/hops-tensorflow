@@ -240,6 +240,10 @@ public class Client {
    */
   public boolean init(String amJar, String main, String files, String logProperties) throws ParseException {
     
+    if (amJar == null || main == null) {
+      throw new IllegalArgumentException("Null not allowed! amJar=" + amJar + ", main=" + main);
+    }
+    
     ArrayList<String> args = new ArrayList<>();
     
     args.add("--" + AM_JAR);
