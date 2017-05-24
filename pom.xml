@@ -14,21 +14,21 @@
     <protobuf.version>3.1.0</protobuf.version>
     <grpc.version>1.1.2</grpc.version>
     <junit.version>4.11</junit.version>
-    <java.version>1.7</java.version>
+    <java.version>1.8</java.version>
   </properties>
 
   <dependencies>
     <!-- hadoop -->
     <dependency>
       <groupId>io.hops</groupId>
-      <artifactId>hadoop-common</artifactId>
+      <artifactId>hadoop-client</artifactId>
       <version>${hadoop.version}</version>
     </dependency>
-    <dependency>
+<!--    <dependency>
       <groupId>io.hops</groupId>
       <artifactId>hadoop-yarn-client</artifactId>
       <version>${hadoop.version}</version>
-    </dependency>
+    </dependency>-->
     <!-- grpc -->
     <dependency>
       <groupId>com.google.guava</groupId>
@@ -131,6 +131,7 @@
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
+          <debug>false</debug>
         </configuration>
       </plugin>
       <plugin>

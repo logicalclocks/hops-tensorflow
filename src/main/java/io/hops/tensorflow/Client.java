@@ -73,7 +73,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Vector;
 
 import static io.hops.tensorflow.ClientArguments.AM_JAR;
 import static io.hops.tensorflow.ClientArguments.AM_MEMORY;
@@ -108,7 +107,6 @@ import static io.hops.tensorflow.CommonArguments.PROTOCOL;
 import static io.hops.tensorflow.CommonArguments.PYTHON;
 import static io.hops.tensorflow.CommonArguments.TENSORBOARD;
 
-// import static io.hops.tensorflow.ClientArguments.PRIORITY;
 
 public class Client {
   
@@ -198,6 +196,8 @@ public class Client {
   }
   
   /**
+   * @param conf
+   * @throws java.lang.Exception
    */
   public Client(Configuration conf) throws Exception {
     this(ApplicationMaster.class.getName(), conf);
@@ -208,10 +208,12 @@ public class Client {
     this.appMasterMainClass = appMasterMainClass;
     yarnClient = YarnClient.createYarnClient();
     yarnClient.init(conf);
+    System.out.println(conf.get(YarnConfiguration.RM_ADDRESS));
     opts = createOptions();
   }
   
   /**
+   * @throws java.lang.Exception
    */
   public Client() throws Exception {
     this(new YarnConfiguration());
@@ -850,7 +852,7 @@ public class Client {
     Map<String, String> launchEnv = setupLaunchEnv();
     
     // Set the executable command for the application master
-    Vector<CharSequence> vargs = new Vector<>(30);
+    List<CharSequence> vargs = new ArrayList<>(30);
     LOG.info("Setting up app master command");
     vargs.add(Environment.JAVA_HOME.$$() + "/bin/java");
     vargs.add("-Xmx" + amMemory + "m");
