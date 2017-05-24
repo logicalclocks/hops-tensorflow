@@ -6,7 +6,7 @@
 
   <groupId>io.hops</groupId>
   <artifactId>hops-tensorflow</artifactId>
-  <version>0.0.4-SNAPSHOT</version>
+  <version>0.0.4</version>
 
   <properties>
     <hadoop.version>2.7.3</hadoop.version>
@@ -24,7 +24,7 @@
       <artifactId>hadoop-client</artifactId>
       <version>${hadoop.version}</version>
     </dependency>
-<!--    <dependency>
+    <!--    <dependency>
       <groupId>io.hops</groupId>
       <artifactId>hadoop-yarn-client</artifactId>
       <version>${hadoop.version}</version>
@@ -226,5 +226,22 @@
       </snapshots>
     </repository>
   </repositories>  
+  <distributionManagement>
+    <repository>
+      <id>sics-release-repository</id>
+      <name>SICS Repository</name>
+      <url>scpexe://kompics.i.sics.se/home/maven/repository</url>
+    </repository>
+    <snapshotRepository>
+      <id>sics-snapshot-repository</id>
+      <name>SICS Snapshot Repository</name>
+      <url>scpexe://kompics.i.sics.se/home/maven/snapshotrepository</url>
+    </snapshotRepository>
+    <site>
+      <id>kompics-site</id>
+      <url>scpexe://kompics.i.sics.se/var/www/kompics/report/trunk</url>
+    </site>
+    <downloadUrl>http://kompics.i.sics.se/maven/repository</downloadUrl>
+  </distributionManagement>
 
 </project>
