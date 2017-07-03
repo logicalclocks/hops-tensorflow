@@ -35,6 +35,7 @@ public abstract class CommonArguments {
   public static final String PROTOCOL = "protocol";
   // public static final String PRIORITY = "priority";
   public static final String ALLOCATION_TIMEOUT = "allocation_timeout";
+  public static final String HDFS_USER = "hdfs_user";
   
   public static final String DEBUG = "debug";
   public static final String HELP = "help";
@@ -57,7 +58,7 @@ public abstract class CommonArguments {
     opts.addOption(PROTOCOL, true, "Specify the protocol parameter for tf.train.Server()");
     // opts.addOption(PRIORITY, true, "Priority for the Python application containers");
     opts.addOption(ALLOCATION_TIMEOUT, true, "Container allocation timeout in seconds");
-    
+    opts.addOption(HDFS_USER, true, "HDFS user that is running this job");
     opts.addOption(DEBUG, false, "Dump out debug information");
     opts.addOption(HELP, false, "Print usage");
     return opts;

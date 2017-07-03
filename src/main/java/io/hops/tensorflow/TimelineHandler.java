@@ -17,8 +17,6 @@
  */
 package io.hops.tensorflow;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.records.Container;
@@ -33,10 +31,12 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import java.io.IOException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.security.PrivilegedExceptionAction;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class TimelineHandler {
   
-  private static final Log LOG = LogFactory.getLog(TimelineHandler.class);
+  private static final Logger LOG = Logger.getLogger(TimelineHandler.class.getName());
   
   private String appAttemptId;
   private String domainId;
@@ -59,11 +59,14 @@ public class TimelineHandler {
               YarnConfiguration.DEFAULT_TIMELINE_SERVICE_ENABLED)) {
             // Creating the Timeline Client
             timelineClient = TimelineClient.createTimelineClient();
+            LOG.log(Level.INFO, "Timeline defaultFS:"+timelineClient.getConfig().get("fs.defaultFS"));
+
             timelineClient.init(conf);
             timelineClient.start();
+            
           } else {
             timelineClient = null;
-            LOG.warn("Timeline service is not enabled");
+            LOG.log(Level.WARNING, "Timeline service is not enabled");
           }
           return null;
         }
@@ -102,7 +105,7 @@ public class TimelineHandler {
         }
       });
     } catch (Exception e) {
-      LOG.error("Container start event could not be published for "
+      LOG.log(Level.SEVERE,"Container start event could not be published for "
               + container.getId().toString(),
           e instanceof UndeclaredThrowableException ? e.getCause() : e);
     }
@@ -123,7 +126,7 @@ public class TimelineHandler {
     try {
       timelineClient.putEntities(entity);
     } catch (YarnException | IOException e) {
-      LOG.error("Container end event could not be published for "
+      LOG.log(Level.SEVERE,"Container end event could not be published for "
           + container.getContainerId().toString(), e);
     }
   }
@@ -141,7 +144,7 @@ public class TimelineHandler {
     try {
       timelineClient.putEntities(entity);
     } catch (YarnException | IOException e) {
-      LOG.error("App Attempt "
+      LOG.log(Level.SEVERE,"App Attempt "
           + (appEvent.equals(ApplicationMaster.YarntfEvent.YARNTF_APP_ATTEMPT_START) ? "start" : "end")
           + " event could not be published for "
           + appAttemptId.toString(), e);
