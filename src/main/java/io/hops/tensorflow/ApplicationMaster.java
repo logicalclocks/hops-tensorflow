@@ -326,7 +326,6 @@ public class ApplicationMaster {
     // requestPriority = Integer.parseInt(cliParser.getOptionValue(PRIORITY, "0"));
 
     allocationTimeout = Long.parseLong(cliParser.getOptionValue(ALLOCATION_TIMEOUT, "15")) * 1000;
-//    hdfsUser = cliParser.getOptionValue(HDFS_USER, null);
 
     environment.put("YARNTF_MEMORY", Integer.toString(containerMemory));
     environment.put("YARNTF_VCORES", Integer.toString(containerVirtualCores));
@@ -336,7 +335,7 @@ public class ApplicationMaster {
     }
     environment.put("YARNTF_WORKERS", Integer.toString(numWorkers));
     environment.put("YARNTF_PSES", Integer.toString(numPses));
-    environment.put("YARNTF_HOME_DIR", FileSystem.get(conf).getHomeDirectory().toString());
+    //environment.put("YARNTF_HOME_DIR", FileSystem.get(conf).getHomeDirectory().toString());
     environment.put("PYTHONUNBUFFERED", "true");
 
     DistributedCacheList distCacheList = null;

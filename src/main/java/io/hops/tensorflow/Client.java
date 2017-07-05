@@ -124,6 +124,7 @@ public class Client {
   private final String appMasterMainClass; // class name
 
   private List<String> files; // local resources in csv format
+  private Map<String, LocalResourceInfo> filesInfo = new HashMap<>();
   private String projectDir;
   // TF application config
   private String python;
@@ -139,7 +140,8 @@ public class Client {
   private int vcores;
   private int gpus;
   private String protocol;
-  private Map<String, String> environment = new HashMap<>(); // environment variables
+  private final Map<String, String> environment = new HashMap<>(); // environment variables
+  private final String APPID_REGEX = "\\$APPID";
   private boolean tensorboard;
 
   private String nodeLabelExpression;
@@ -449,34 +451,32 @@ public class Client {
 
   private void logClusterState() throws IOException, YarnException {
     YarnClusterMetrics clusterMetrics = yarnClient.getYarnClusterMetrics();
-    LOG.info("Got Cluster metric info from ASM"
-        + "\n\t numNodeManagers=" + clusterMetrics.getNumNodeManagers());
+    LOG.log(Level.INFO, "Got Cluster metric info from ASM\n\t numNodeManagers={0}", clusterMetrics.getNumNodeManagers());
 
     List<NodeReport> clusterNodeReports = yarnClient.getNodeReports(
         NodeState.RUNNING);
     LOG.info("Got Cluster node info from ASM");
     for (NodeReport node : clusterNodeReports) {
-      LOG.info("Got node report from ASM for"
-          + "\n\t nodeId=" + node.getNodeId()
-          + "\n\t nodeAddress" + node.getHttpAddress()
-          + "\n\t nodeRackName" + node.getRackName()
-          + "\n\t nodeNumContainers" + node.getNumContainers());
+      LOG.log(Level.INFO,
+          "Got node report from ASM for\n\t nodeId={0}\n\t nodeAddress{1}\n\t nodeRackName{2}\n\t nodeNumContainers{3}",
+          new Object[]{node.getNodeId(),
+            node.getHttpAddress(), node.getRackName(), node.getNumContainers()});
     }
 
     QueueInfo queueInfo = yarnClient.getQueueInfo(this.queue);
-    LOG.info("Queue info"
-        + "\n\t queueName=" + queueInfo.getQueueName()
-        + "\n\t queueCurrentCapacity=" + queueInfo.getCurrentCapacity()
-        + "\n\t queueMaxCapacity=" + queueInfo.getMaximumCapacity()
-        + "\n\t queueApplicationCount=" + queueInfo.getApplications().size()
-        + "\n\t queueChildQueueCount=" + queueInfo.getChildQueues().size());
+    LOG.log(Level.INFO,
+        "Queue info\n\t queueName={0}\n\t queueCurrentCapacity={1}\n\t queueMaxCapacity={2}\n\t "
+        + "queueApplicationCount={3}\n\t queueChildQueueCount={4}",
+        new Object[]{queueInfo.getQueueName(),
+          queueInfo.getCurrentCapacity(), queueInfo.getMaximumCapacity(), queueInfo.getApplications().size(),
+          queueInfo.getChildQueues().size()});
 
     List<QueueUserACLInfo> listAclInfo = yarnClient.getQueueAclsInfo();
     for (QueueUserACLInfo aclInfo : listAclInfo) {
       for (QueueACL userAcl : aclInfo.getUserAcls()) {
-        LOG.info("User ACL Info for Queue"
-            + "\n\t queueName=" + aclInfo.getQueueName()
-            + "\n\t userAcl=" + userAcl.name());
+        LOG.log(Level.INFO, "User ACL Info for Queue\n\t queueName={0}\n\t userAcl={1}", new Object[]{aclInfo.
+          getQueueName(),
+          userAcl.name()});
       }
     }
   }
@@ -523,7 +523,7 @@ public class Client {
             + "\n\t appUser=" + report.getUser());
         oldState = state;
       } else {
-        LOG.info("Got application report from ASM for " + appId + " (state: " + state + ")");
+        LOG.log(Level.INFO, "Got application report from ASM for {0} (state: {1})", new Object[]{appId, state});
       }
 
       if (YarnApplicationState.FINISHED == state) {
@@ -531,16 +531,17 @@ public class Client {
           LOG.info("Application has completed successfully. Breaking monitoring loop");
           return true;
         } else {
-          LOG.info("Application did finished unsuccessfully."
-              + " YarnState=" + state.toString() + ", DSFinalStatus=" + dsStatus.toString()
-              + ". Breaking monitoring loop");
+          LOG.log(Level.INFO,
+              "Application did finished unsuccessfully. YarnState={0}, DSFinalStatus={1}. Breaking monitoring loop",
+              new Object[]{state.toString(),
+                dsStatus.toString()});
           return false;
         }
       } else if (YarnApplicationState.KILLED == state
           || YarnApplicationState.FAILED == state) {
-        LOG.info("Application did not finish."
-            + " YarnState=" + state.toString() + ", DSFinalStatus=" + dsStatus.toString()
-            + ". Breaking monitoring loop");
+        LOG.log(Level.INFO, "Application did not finish. YarnState={0}, DSFinalStatus={1}. Breaking monitoring loop",
+            new Object[]{state.toString(),
+              dsStatus.toString()});
         return false;
       }
 
@@ -660,6 +661,14 @@ public class Client {
     this.files.add(file);
   }
 
+  public Map<String, LocalResourceInfo> getFilesInfo() {
+    return filesInfo;
+  }
+
+  public void setFilesInfo(Map<String, LocalResourceInfo> filesInfo) {
+    this.filesInfo = filesInfo;
+  }
+
   public void setProjectDir(String projectDir) {
     this.projectDir = projectDir;
   }
@@ -716,14 +725,10 @@ public class Client {
     return environment;
   }
 
-  public void setEnvironment(Map<String, String> environment) {
-    this.environment = environment;
-  }
-
   public void addEnvironmentVariable(String key, String val) {
     this.environment.put(key, val);
   }
-  
+
   public boolean isTensorboard() {
     return tensorboard;
   }
@@ -832,14 +837,14 @@ public class Client {
 
   private void prepareTimelineDomain() {
     TimelineClient timelineClient;
-    LOG.log(Level.INFO, "prepareTimelineDomain Timeline defaultFS:" + conf.get("fs.defaultFS"));
+    LOG.log(Level.INFO, "prepareTimelineDomain Timeline defaultFS:{0}", conf.get("fs.defaultFS"));
     if (conf.getBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED,
         YarnConfiguration.DEFAULT_TIMELINE_SERVICE_ENABLED)) {
       timelineClient = TimelineClient.createTimelineClient();
       timelineClient.init(conf);
       timelineClient.start();
     } else {
-      LOG.log(Level.WARNING, "Cannot put the domain " + domainId + " because the timeline service is not enabled");
+      LOG.log(Level.WARNING, "Cannot put the domain {0} because the timeline service is not enabled", domainId);
       return;
     }
     try {
@@ -848,7 +853,7 @@ public class Client {
       domain.setReaders(viewACLs != null && viewACLs.length() > 0 ? viewACLs : " ");
       domain.setWriters(modifyACLs != null && modifyACLs.length() > 0 ? modifyACLs : " ");
       timelineClient.putDomain(domain);
-      LOG.info("Put the timeline domain: " + TimelineUtils.dumpTimelineRecordtoJSON(domain));
+      LOG.log(Level.INFO, "Put the timeline domain: {0}", TimelineUtils.dumpTimelineRecordtoJSON(domain));
     } catch (Exception e) {
       LOG.log(Level.SEVERE, "Error when putting the timeline domain", e);
     } finally {
@@ -861,19 +866,21 @@ public class Client {
     LOG.info("Max mem capabililty of resources in this cluster " + maxMem);
 
     if (amMemory > maxMem) {
-      LOG.info("AM memory specified above max threshold of cluster. Using max value."
-          + ", specified=" + amMemory
-          + ", max=" + maxMem);
+      LOG.
+          log(Level.INFO, "AM memory specified above max threshold of cluster. Using max value., specified={0}, max={1}",
+              new Object[]{amMemory,
+                maxMem});
       amMemory = maxMem;
     }
 
     int maxVCores = appResponse.getMaximumResourceCapability().getVirtualCores();
-    LOG.info("Max virtual cores capabililty of resources in this cluster " + maxVCores);
+    LOG.log(Level.INFO, "Max virtual cores capabililty of resources in this cluster {0}", maxVCores);
 
     if (amVCores > maxVCores) {
-      LOG.info("AM virtual cores specified above max threshold of cluster. "
-          + "Using max value." + ", specified=" + amVCores
-          + ", max=" + maxVCores);
+      LOG.log(Level.INFO,
+          "AM virtual cores specified above max threshold of cluster. Using max value., specified={0}, max={1}",
+          new Object[]{amVCores,
+            maxVCores});
       amVCores = maxVCores;
     }
   }
@@ -914,7 +921,8 @@ public class Client {
     vargs.add(newArg(PSES, Integer.toString(numPses)));
 
     for (Map.Entry<String, String> entry : environment.entrySet()) {
-      vargs.add(newArg(ENV, entry.getKey() + "=" + entry.getValue()));
+      //Replace AppId regex
+      vargs.add(newArg(ENV, entry.getKey() + "=" + entry.getValue().replaceAll(APPID_REGEX, appId.toString())));
     }
     if (tensorboard) {
       vargs.add("--" + TENSORBOARD);
@@ -952,7 +960,7 @@ public class Client {
       final Token<?> tokens[] = fs.addDelegationTokens(tokenRenewer, credentials);
       if (tokens != null) {
         for (Token<?> token : tokens) {
-          LOG.log(Level.INFO, "Got dt for {0}; {1}", new Object[]{fs.getUri(), token});
+          LOG.log(Level.FINE, "Got dt for {0}; {1}", new Object[]{fs.getUri(), token});
         }
       }
       DataOutputBuffer dob = new DataOutputBuffer();
@@ -967,20 +975,26 @@ public class Client {
   private DistributedCacheList populateDistributedCache(FileSystem fs, ApplicationId appId) throws IOException {
     DistributedCacheList distCacheList = new DistributedCacheList();
 
-    mainRelative = addResource(fs, appId, main, null, null, distCacheList, null, null);
+    mainRelative = addResource(fs, appId, main, null, null, distCacheList, null, null, null, LocalResourceType.FILE,
+        LocalResourceVisibility.APPLICATION, null);
 
     StringBuilder pythonPath = new StringBuilder(Constants.LOCALIZED_PYTHON_DIR);
     if (files == null || files.isEmpty()) {
-      if (cliParser.hasOption(FILES)) {
+      if (cliParser != null && cliParser.hasOption(FILES)) {
         files = Arrays.asList(cliParser.getOptionValue(FILES).split(","));
       }
-    }
-    LOG.log(Level.INFO, "TF files:{0}", Arrays.toString(files.toArray()));
-    for (String file : files) {
-      if (file.endsWith(".py")) {
-        addResource(fs, appId, file, Constants.LOCALIZED_PYTHON_DIR, null, distCacheList, null, null);
-      } else {
-        addResource(fs, appId, file, null, null, distCacheList, null, pythonPath);
+    } else {
+      LOG.log(Level.FINE, "TF files:{0}", Arrays.toString(files.toArray()));
+      for (String file : files) {
+        if (file.endsWith(".py")) {
+          addResource(fs, appId, file, Constants.LOCALIZED_PYTHON_DIR, null, distCacheList, null, null, filesInfo.get(
+              file).getName(), filesInfo.get(file).getType(), filesInfo.get(file).getVisibility(), filesInfo.get(file).
+              getPattern());
+        } else {
+          addResource(fs, appId, file, null, null, distCacheList, null, pythonPath, filesInfo.get(
+              file).getName(), filesInfo.get(file).getType(), filesInfo.get(file).getVisibility(), filesInfo.get(file).
+              getPattern());
+        }
       }
     }
     environment.put("PYTHONPATH", pythonPath.toString());
@@ -997,10 +1011,12 @@ public class Client {
 
     // Copy the application master jar to the filesystem
     // Create a local resource to point to the destination jar path
-    addResource(fs, appId, amJar, null, Constants.AM_JAR_PATH, null, localResources, null);
+    addResource(fs, appId, amJar, null, Constants.AM_JAR_PATH, null, localResources, null, null, LocalResourceType.FILE,
+        LocalResourceVisibility.APPLICATION, null);
 
     if (log4jPropFile != null && !log4jPropFile.isEmpty()) {
-      addResource(fs, appId, log4jPropFile, null, Constants.LOG4J_PATH, null, localResources, null);
+      addResource(fs, appId, log4jPropFile, null, Constants.LOG4J_PATH, null, localResources, null, null,
+          LocalResourceType.FILE, LocalResourceVisibility.APPLICATION, null);
     }
 
     // Write distCacheList to HDFS and add to localResources
@@ -1026,14 +1042,16 @@ public class Client {
   }
 
   private String addResource(FileSystem fs, ApplicationId appId, String srcPath, String dstDir, String dstName,
-      DistributedCacheList distCache, Map<String, LocalResource> localResources, StringBuilder pythonPath)
+      DistributedCacheList distCache, Map<String, LocalResource> localResources, StringBuilder pythonPath,
+      String localResourceName, LocalResourceType type, LocalResourceVisibility visibility, String pattern)
       throws IOException {
     Path src = new Path(srcPath);
 
-    if (dstName == null) {
+    if (localResourceName != null) {
+      dstName = localResourceName;
+    } else if (dstName == null) {
       dstName = src.getName();
     }
-
     String dstPath;
     Path dst;
     if (srcPath.startsWith("hdfs://")) {
@@ -1067,12 +1085,23 @@ public class Client {
 
     if (localResources != null) {
       LOG.log(Level.INFO, "Adding to local environment: {0} -> {1}", new Object[]{srcPath, dstPath});
-      LocalResource resource = LocalResource.newInstance(
-          ConverterUtils.getYarnUrlFromURI(dst.toUri()),
-          LocalResourceType.FILE,
-          LocalResourceVisibility.APPLICATION,
-          dstStatus.getLen(),
-          dstStatus.getModificationTime());
+      LocalResource resource = null;
+      if (pattern != null) {
+        resource = LocalResource.newInstance(
+            ConverterUtils.getYarnUrlFromURI(dst.toUri()),
+            type,
+            visibility,
+            dstStatus.getLen(),
+            dstStatus.getModificationTime(),
+            pattern);
+      } else {
+        resource = LocalResource.newInstance(
+            ConverterUtils.getYarnUrlFromURI(dst.toUri()),
+            type,
+            visibility,
+            dstStatus.getLen(),
+            dstStatus.getModificationTime());
+      }
       localResources.put(dstName, resource);
     }
 
