@@ -1,98 +1,249 @@
-# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Provides data for the MNIST dataset.
-
-The dataset scripts used to create the dataset can be found at:
-tensorflow/models/slim/datasets/download_and_convert_mnist.py
-"""
+# Distributed MNIST on grid based on TensorFlow MNIST example
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import argparse
+import math
 import os
+import time
+from datetime import datetime
+
 import tensorflow as tf
 
-from datasets import dataset_utils
+import yarntf
 
-slim = tf.contrib.slim
-
-_FILE_PATTERN = 'mnist_%s.tfrecord'
-
-_SPLITS_TO_SIZES = {'train': 60000, 'test': 10000}
-
-_NUM_CLASSES = 10
-
-_ITEMS_TO_DESCRIPTIONS = {
-    'image': 'A [28 x 28 x 1] grayscale image.',
-    'label': 'A single integer between 0 and 9',
-}
+IMAGE_PIXELS = 28
 
 
-def get_split(split_name, dataset_dir, file_pattern=None, reader=None):
-  """Gets a dataset tuple with instructions for reading MNIST.
+def print_log(worker_id, arg):
+    print(worker_id, end=": ")
+    print(arg)
 
-  Args:
-    split_name: A train/test split name.
-    dataset_dir: The base directory of the dataset sources.
-    file_pattern: The file pattern to use when matching the dataset sources.
-      It is assumed that the pattern contains a '%s' string so that the split
-      name can be inserted.
-    reader: The TensorFlow reader type.
 
-  Returns:
-    A `Dataset` namedtuple.
+def hdfs_path(relative_path):
+    return args.base_path + "/" + relative_path
 
-  Raises:
-    ValueError: if `split_name` is not a valid train/test split.
-  """
-  if split_name not in _SPLITS_TO_SIZES:
-    raise ValueError('split name %s was not recognized.' % split_name)
 
-  if not file_pattern:
-    file_pattern = _FILE_PATTERN
-  file_pattern = os.path.join(dataset_dir, file_pattern % split_name)
+def main(args):
+    job_name = os.environ["YARNTF_JOB_NAME"]
+    task_index = int(os.environ["YARNTF_TASK_INDEX"])
+    num_workers = int(os.environ["YARNTF_WORKERS"])
+    num_pses = int(os.environ["YARNTF_PSES"])
+    worker_id = job_name + str(task_index)
 
-  # Allowing None in the signature so that dataset_factory can use the default.
-  if reader is None:
-    reader = tf.TFRecordReader
+    # Parameters
+    hidden_units = 128
+    batch_size = 100
 
-  keys_to_features = {
-      'image/encoded': tf.FixedLenFeature((), tf.string, default_value=''),
-      'image/format': tf.FixedLenFeature((), tf.string, default_value='raw'),
-      'image/class/label': tf.FixedLenFeature(
-          [1], tf.int64, default_value=tf.zeros([1], dtype=tf.int64)),
-  }
+    # Get TF cluster and server instances
+    cluster, server = yarntf.createClusterServer()
 
-  items_to_handlers = {
-      'image': slim.tfexample_decoder.Image(shape=[28, 28, 1], channels=1),
-      'label': slim.tfexample_decoder.Tensor('image/class/label', shape=[]),
-  }
+    def read_csv_examples(image_dir, label_dir, batch_size=100, num_epochs=None, task_index=None, num_workers=None):
+        print_log(worker_id, "num_epochs: {0}".format(num_epochs))
+        # Setup queue of csv image filenames
+        tf_record_pattern = os.path.join(image_dir, 'part-*')
+        images = tf.gfile.Glob(tf_record_pattern)
+        print_log(worker_id, "images: {0}".format(images))
+        image_queue = tf.train.string_input_producer(images, shuffle=False, capacity=1000, num_epochs=num_epochs,
+                                                     name="image_queue")
 
-  decoder = slim.tfexample_decoder.TFExampleDecoder(
-      keys_to_features, items_to_handlers)
+        # Setup queue of csv label filenames
+        tf_record_pattern = os.path.join(label_dir, 'part-*')
+        labels = tf.gfile.Glob(tf_record_pattern)
+        print_log(worker_id, "labels: {0}".format(labels))
+        label_queue = tf.train.string_input_producer(labels, shuffle=False, capacity=1000, num_epochs=num_epochs,
+                                                     name="label_queue")
 
-  labels_to_names = None
-  if dataset_utils.has_labels(dataset_dir):
-    labels_to_names = dataset_utils.read_label_file(dataset_dir)
+        # Setup reader for image queue
+        img_reader = tf.TextLineReader(name="img_reader")
+        _, img_csv = img_reader.read(image_queue)
+        image_defaults = [[1.0] for col in range(784)]
+        img = tf.pack(tf.decode_csv(img_csv, image_defaults))
+        # Normalize values to [0,1]
+        norm = tf.constant(255, dtype=tf.float32, shape=(784,))
+        image = tf.div(img, norm)
+        print_log(worker_id, "image: {0}".format(image))
 
-  return slim.dataset.Dataset(
-      data_sources=file_pattern,
-      reader=reader,
-      decoder=decoder,
-      num_samples=_SPLITS_TO_SIZES[split_name],
-      num_classes=_NUM_CLASSES,
-      items_to_descriptions=_ITEMS_TO_DESCRIPTIONS,
-      labels_to_names=labels_to_names)
+        # Setup reader for label queue
+        label_reader = tf.TextLineReader(name="label_reader")
+        _, label_csv = label_reader.read(label_queue)
+        label_defaults = [[1.0] for col in range(10)]
+        label = tf.pack(tf.decode_csv(label_csv, label_defaults))
+        print_log(worker_id, "label: {0}".format(label))
+
+        # Return a batch of examples
+        return tf.train.batch([image, label], batch_size, num_threads=args.readers, name="batch_csv")
+
+    def read_tfr_examples(path, batch_size=100, num_epochs=None, task_index=None, num_workers=None):
+        print_log(worker_id, "num_epochs: {0}".format(num_epochs))
+
+        # Setup queue of TFRecord filenames
+        tf_record_pattern = os.path.join(path, 'part-*')
+        files = tf.gfile.Glob(tf_record_pattern)
+        queue_name = "file_queue"
+
+        # split input files across workers, if specified
+        if task_index is not None and num_workers is not None:
+            num_files = len(files)
+            files = files[task_index:num_files:num_workers]
+            queue_name = "file_queue_{0}".format(task_index)
+
+        print_log(worker_id, "files: {0}".format(files))
+        file_queue = tf.train.string_input_producer(files, shuffle=False, capacity=1000, num_epochs=num_epochs,
+                                                    name=queue_name)
+
+        # Setup reader for examples
+        reader = tf.TFRecordReader(name="reader")
+        _, serialized = reader.read(file_queue)
+        feature_def = {'label': tf.FixedLenFeature([10], tf.int64), 'image': tf.FixedLenFeature([784], tf.int64)}
+        features = tf.parse_single_example(serialized, feature_def)
+        norm = tf.constant(255, dtype=tf.float32, shape=(784,))
+        image = tf.div(tf.to_float(features['image']), norm)
+        print_log(worker_id, "image: {0}".format(image))
+        label = tf.to_float(features['label'])
+        print_log(worker_id, "label: {0}".format(label))
+
+        # Return a batch of examples
+        return tf.train.batch([image, label], batch_size, num_threads=args.readers, name="batch")
+
+    if job_name == "ps":
+        server.join()
+    elif job_name == "worker":
+        # Assigns ops to the local worker by default.
+        with tf.device(tf.train.replica_device_setter(
+                worker_device="/job:worker/task:%d" % task_index,
+                cluster=cluster)):
+
+            # Variables of the hidden layer
+            hid_w = tf.Variable(tf.truncated_normal([IMAGE_PIXELS * IMAGE_PIXELS, hidden_units],
+                                                    stddev=1.0 / IMAGE_PIXELS), name="hid_w")
+            hid_b = tf.Variable(tf.zeros([hidden_units]), name="hid_b")
+
+            # Variables of the softmax layer
+            sm_w = tf.Variable(tf.truncated_normal([hidden_units, 10],
+                                                   stddev=1.0 / math.sqrt(hidden_units)), name="sm_w")
+            sm_b = tf.Variable(tf.zeros([10]), name="sm_b")
+
+            # Placeholders or QueueRunner/Readers for input data
+            num_epochs = 1 if args.mode == "inference" else None if args.epochs == 0 else args.epochs
+            index = task_index if args.mode == "inference" else None
+            workers = num_workers if args.mode == "inference" else None
+
+            if args.format == "csv":
+                images = hdfs_path(args.images)
+                labels = hdfs_path(args.labels)
+                x, y_ = read_csv_examples(images, labels, 100, num_epochs, index, workers)
+            elif args.format == "tfr":
+                images = hdfs_path(args.images)
+                x, y_ = read_tfr_examples(images, 100, num_epochs, index, workers)
+            else:
+                raise ("{0} format not supported for tf input mode".format(args.format))
+
+            hid_lin = tf.nn.xw_plus_b(x, hid_w, hid_b)
+            hid = tf.nn.relu(hid_lin)
+
+            y = tf.nn.softmax(tf.nn.xw_plus_b(hid, sm_w, sm_b))
+
+            global_step = tf.Variable(0)
+
+            loss = -tf.reduce_sum(y_ * tf.log(tf.clip_by_value(y, 1e-10, 1.0)))
+            train_op = tf.train.AdagradOptimizer(0.01).minimize(
+                loss, global_step=global_step)
+
+            # Test trained model
+            label = tf.argmax(y_, 1, name="label")
+            prediction = tf.argmax(y, 1, name="prediction")
+            correct_prediction = tf.equal(prediction, label)
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accuracy")
+
+            saver = tf.train.Saver()
+            summary_op = tf.summary.merge_all()
+            init_op = tf.global_variables_initializer()
+
+        # Create a "supervisor", which oversees the training process and stores model state into HDFS
+        logdir = hdfs_path(args.model)
+        print("tensorflow model path: {0}".format(logdir))
+        summary_writer = tf.summary.FileWriter(os.environ["YARNTF_TB_DIR"], graph=tf.get_default_graph())
+
+        if args.mode == "train":
+            sv = tf.train.Supervisor(is_chief=(task_index == 0),
+                                     logdir=logdir,
+                                     init_op=init_op,
+                                     summary_op=summary_op,
+                                     saver=saver,
+                                     global_step=global_step,
+                                     summary_writer=summary_writer,
+                                     stop_grace_secs=300,
+                                     save_model_secs=10)
+        else:
+            sv = tf.train.Supervisor(is_chief=(task_index == 0),
+                                     logdir=logdir,
+                                     saver=saver,
+                                     global_step=global_step,
+                                     stop_grace_secs=300,
+                                     save_model_secs=0)
+            output_dir = hdfs_path(args.output)
+            output_file = tf.gfile.Open("{0}/part-{1:05d}".format(output_dir, task_index), mode='w')
+
+        # The supervisor takes care of session initialization, restoring from
+        # a checkpoint, and closing when done or an error occurs.
+        with sv.managed_session(server.target) as sess:
+            print("{0} session ready".format(datetime.now().isoformat()))
+
+            # Loop until the supervisor shuts down or 1000000 steps have completed.
+            step = 0
+            count = 0
+            while not sv.should_stop() and step < args.steps:
+                # Run a training step asynchronously.
+                # See `tf.train.SyncReplicasOptimizer` for additional details on how to
+                # perform *synchronous* training.
+
+                # using QueueRunners/Readers
+                if args.mode == "train":
+                    if (step % 100 == 0):
+                        print(
+                            "{0} step: {1} accuracy: {2}".format(datetime.now().isoformat(), step, sess.run(accuracy)))
+                    _, summary, step = sess.run([train_op, summary_op, global_step])
+                    summary_writer.add_summary(summary, step)
+                else:  # args.mode == "inference"
+                    labels, pred, acc = sess.run([label, prediction, accuracy])
+                    # print("label: {0}, pred: {1}".format(labels, pred))
+                    print("acc: {0}".format(acc))
+                    for i in range(len(labels)):
+                        count += 1
+                        output_file.write("{0} {1}\n".format(labels[i], pred[i]))
+                    print("count: {0}".format(count))
+
+        if args.mode == "inference":
+            output_file.close()
+            # Delay chief worker from shutting down supervisor during inference, since it can load model, start session,
+            # run inference and request stop before the other workers even start/sync their sessions.
+            if task_index == 0:
+                time.sleep(60)
+
+        # Ask for all the services to stop.
+        print("{0} stopping supervisor".format(datetime.now().isoformat()))
+        sv.stop()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-e", "--epochs", help="number of epochs", type=int, default=0)
+    parser.add_argument("-f", "--format", help="example format: (csv|pickle|tfr)", choices=["csv", "pickle", "tfr"],
+                        default="tfr")
+    parser.add_argument("-i", "--images", help="HDFS path to MNIST images in parallelized format")
+    parser.add_argument("-l", "--labels", help="HDFS path to MNIST labels in parallelized format")
+    parser.add_argument("-m", "--model", help="HDFS path to save/load model during train/test", default="mnist_model")
+    parser.add_argument("-o", "--output", help="HDFS path to save test/inference output", default="predictions")
+    parser.add_argument("-r", "--readers", help="number of reader/enqueue threads", type=int, default=1)
+    parser.add_argument("-s", "--steps", help="maximum number of steps", type=int, default=1000)
+    parser.add_argument("-X", "--mode", help="train|inference", default="train")
+    parser.add_argument("-b", "--base_path", help="HDFS base path for input/output files")
+    args = parser.parse_args()
+    print("args:", args)
+
+    print("{0} ===== Start".format(datetime.now().isoformat()))
+    main(args)
+    print("{0} ===== Stop".format(datetime.now().isoformat()))
