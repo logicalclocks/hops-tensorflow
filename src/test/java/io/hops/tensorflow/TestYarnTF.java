@@ -21,6 +21,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
+import org.apache.hadoop.yarn.client.api.YarnClientApplication;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -57,7 +58,10 @@ public class TestYarnTF extends TestCluster {
     boolean initSuccess = client.init(args);
     Assert.assertTrue(initSuccess);
     LOG.info("Running yarntf Client");
-    final ApplicationId appId = client.submitApplication();
+    YarnClientApplication app = client.createApplication();
+    final ApplicationId appId = app.getNewApplicationResponse()
+        .getApplicationId();
+    client.submitApplication(app);
 
     boolean result = client.monitorApplication(appId);
     LOG.info("Client run completed. Result=" + result);
@@ -85,7 +89,10 @@ public class TestYarnTF extends TestCluster {
     client.setProtocol("grpc+verbs");
 
     LOG.info("Running yarntf Client");
-    final ApplicationId appId = client.submitApplication();
+    YarnClientApplication app = client.createApplication();
+    final ApplicationId appId = app.getNewApplicationResponse()
+        .getApplicationId();
+    client.submitApplication(app);
 
     boolean result = client.monitorApplication(appId);
     LOG.info("Client run completed. Result=" + result);
