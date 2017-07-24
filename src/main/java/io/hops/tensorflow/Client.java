@@ -34,6 +34,7 @@ import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.service.Service;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.protocolrecords.GetNewApplicationResponse;
@@ -212,6 +213,7 @@ public class Client {
     this.conf = conf;
     yarnClient = YarnClient.createYarnClient();
     yarnClient.init(conf);
+    yarnClient.start();
     opts = createOptions();
   }
 
@@ -420,12 +422,32 @@ public class Client {
    */
   public boolean run() throws IOException, YarnException {
     // Submit and monitor the application
-    return monitorApplication(submitApplication());
+    YarnClientApplication app = createApplication();
+    submitApplication(app);
+    return monitorApplication(app.getNewApplicationResponse().getApplicationId());
   }
 
-  public ApplicationId submitApplication() throws IOException, YarnException {
+  public YarnClientApplication createApplication() throws YarnException, IOException{
     LOG.info("Running Client");
-    yarnClient.start();
+    
+    if (null == yarnClient
+        || !yarnClient.getServiceState().equals(Service.STATE.STARTED)) {
+      LOG.severe("YarnClient is not started, state is: " + yarnClient
+          .getServiceState().toString());
+      throw new YarnException("YarnClient is not started <" + yarnClient
+          .getServiceState().toString() + ">");
+    }
+    
+    return yarnClient.createApplication();
+  }
+  
+  public void submitApplication(YarnClientApplication app) throws
+      IOException, YarnException {
+    
+    if (null == app) {
+      throw new YarnException("YarnClientApplication is null. Have called " +
+          "createApplication?");
+    }
 
     logClusterState();
 
@@ -433,11 +455,7 @@ public class Client {
       prepareTimelineDomain();
     }
 
-    // Get a new application id
-    YarnClientApplication app = yarnClient.createApplication();
     GetNewApplicationResponse appResponse = app.getNewApplicationResponse();
-    ApplicationId appId = appResponse.getApplicationId();
-    LOG.info("Received application id: " + appId);
 
     verifyClusterResources(appResponse);
 
@@ -446,10 +464,45 @@ public class Client {
 
     LOG.info("Submitting application to ASM");
     yarnClient.submitApplication(appContext);
-
+  }
+  
+  /**
+   * @deprecated This method is deprecated. You should use createApplication()
+   * and submitApplication(YarnClientApplication) instead
+   * @return
+   * @throws IOException
+   * @throws YarnException
+   */
+  @Deprecated
+  public ApplicationId submitApplication() throws IOException, YarnException {
+    LOG.info("Running Client");
+    if (!yarnClient.getServiceState().equals(Service.STATE.STARTED)) {
+      yarnClient.start();
+    }
+    
+    logClusterState();
+    
+    if (domainId != null && domainId.length() > 0 && toCreateDomain) {
+      prepareTimelineDomain();
+    }
+    
+    // Get a new application id
+    YarnClientApplication app = yarnClient.createApplication();
+    GetNewApplicationResponse appResponse = app.getNewApplicationResponse();
+    ApplicationId appId = appResponse.getApplicationId();
+    LOG.info("Received application id: " + appId);
+    
+    verifyClusterResources(appResponse);
+    
+    ContainerLaunchContext containerContext = createContainerLaunchContext(appResponse);
+    ApplicationSubmissionContext appContext = createApplicationSubmissionContext(app, containerContext);
+    
+    LOG.info("Submitting application to ASM");
+    yarnClient.submitApplication(appContext);
+    
     return appId;
   }
-
+  
   private void logClusterState() throws IOException, YarnException {
     YarnClusterMetrics clusterMetrics = yarnClient.getYarnClusterMetrics();
     LOG.log(Level.INFO, "Got Cluster metric info from ASM\n\t numNodeManagers={0}", clusterMetrics.getNumNodeManagers());
@@ -833,6 +886,7 @@ public class Client {
   public void initYarnClient() {
     yarnClient = YarnClient.createYarnClient();
     yarnClient.init(conf);
+    yarnClient.start();
     opts = createOptions();
   }
 
