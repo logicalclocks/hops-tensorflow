@@ -166,6 +166,7 @@ public class Client {
   // Command line options
   private Options opts;
   private CommandLine cliParser;
+  private final Map<String, LocalResource> localResources = new HashMap<>();
 
   /**
    * @param args
@@ -891,7 +892,7 @@ public class Client {
     ApplicationId appId = appResponse.getApplicationId();
 
     DistributedCacheList dcl = populateDistributedCache(fs, appId);
-    Map<String, LocalResource> localResources = prepareLocalResources(fs, appId, dcl);
+    localResources.putAll(prepareLocalResources(fs, appId, dcl));
     Map<String, String> launchEnv = setupLaunchEnv();
 
     // Set the executable command for the application master
@@ -987,11 +988,11 @@ public class Client {
       LOG.log(Level.FINE, "TF files:{0}", Arrays.toString(files.toArray()));
       for (String file : files) {
         if (file.endsWith(".py")) {
-          addResource(fs, appId, file, Constants.LOCALIZED_PYTHON_DIR, null, distCacheList, null, null, filesInfo.get(
-              file).getName(), filesInfo.get(file).getType(), filesInfo.get(file).getVisibility(), filesInfo.get(file).
-              getPattern());
+          addResource(fs, appId, file, Constants.LOCALIZED_PYTHON_DIR, null, distCacheList, localResources, null,
+              filesInfo.get(file).getName(), filesInfo.get(file).getType(), filesInfo.get(file).getVisibility(),
+              filesInfo.get(file).getPattern());
         } else {
-          addResource(fs, appId, file, null, null, distCacheList, null, pythonPath, filesInfo.get(
+          addResource(fs, appId, file, null, null, distCacheList, localResources, pythonPath, filesInfo.get(
               file).getName(), filesInfo.get(file).getType(), filesInfo.get(file).getVisibility(), filesInfo.get(file).
               getPattern());
         }
@@ -1007,7 +1008,6 @@ public class Client {
     // set local resources for the application master
     // local files or archives as needed
     // In this scenario, the jar file for the application master is part of the local resources
-    Map<String, LocalResource> localResources = new HashMap<>();
 
     // Copy the application master jar to the filesystem
     // Create a local resource to point to the destination jar path
